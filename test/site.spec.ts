@@ -209,9 +209,9 @@ describe("ordering", () => {
         ],
       }),
     });
-    const { number } = await created.json<{ number: string }>();
+    const { number, token } = await created.json<{ number: string; token: string }>();
 
-    const page = await html(`/order/thanks?n=${encodeURIComponent(number)}`);
+    const page = await html(`/order/thanks?n=${encodeURIComponent(number)}&t=${token}`);
     expect(page).toContain(number);
     expect(page).toContain("Thanks, Maya");
     expect(page).toContain("Espresso Martini");
@@ -266,7 +266,7 @@ describe("ordering", () => {
       redirect: "manual",
     });
     expect(response.status).toBe(303);
-    expect(response.headers.get("location") ?? "").toMatch(/\/order\/thanks\?n=SN-\d+/);
+    expect(response.headers.get("location") ?? "").toMatch(/\/order\/thanks\?n=SN-\d+&t=[0-9a-f]{32}/);
   });
 
   it("re-renders the menu with an error when the order is bad", async () => {
@@ -330,8 +330,8 @@ describe("receipt privacy", () => {
         items: [{ slug: "affogato", size: "one", qty: 1 }],
       }),
     });
-    const { number } = await created.json<{ number: string }>();
-    const page = await html(`/order/thanks?n=${encodeURIComponent(number)}`);
+    const { number, token } = await created.json<{ number: string; token: string }>();
+    const page = await html(`/order/thanks?n=${encodeURIComponent(number)}&t=${token}`);
     expect(page).toContain('<meta name="robots" content="noindex, nofollow">');
     expect(page).not.toContain("<link rel=\"canonical\"");
 
@@ -396,5 +396,54 @@ describe("sold out items", () => {
     } finally {
       await env.DB.prepare("UPDATE coffee_types SET available = 1 WHERE slug = ?").bind("affogato").run();
     }
+  });
+});
+
+describe("brand mark", () => {
+  it("serves the current mark from one source, not a stale asset", async () => {
+    const response = await get("/mark.svg");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("image/svg+xml");
+    const svg = await response.text();
+    // the coupe glass, not the old nest illustration
+    expect(svg).toContain("M10 21C10 34.5 19.5 43 32 43S54 34.5 54 21Z");
+    expect(await (await get("/favicon.svg")).text()).toBe(svg);
+  });
+});
+
+describe("receipts are not walkable", () => {
+  it("refuses another customer's order number without its token", async () => {
+    const created = await get("/api/order", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Wendy Alcott",
+        contact: "wendy@example.com",
+        pickup_at: "Today 2:00pm",
+        notes: "leave it with the barista",
+        items: [{ slug: "espresso-tonic", size: "12oz", qty: 1 }],
+      }),
+    });
+    const { number, token } = await created.json<{ number: string; token: string }>();
+    expect(token).toMatch(/^[0-9a-f]{32}$/);
+
+    // the number alone is guessable, so it must not be enough
+    expect((await get(`/order/thanks?n=${encodeURIComponent(number)}`)).status).toBe(404);
+    expect((await get(`/order/thanks?n=${encodeURIComponent(number)}&t=wrong`)).status).toBe(404);
+
+    const ok = await get(`/order/thanks?n=${encodeURIComponent(number)}&t=${token}`);
+    expect(ok.status).toBe(200);
+    expect(await ok.text()).toContain("Wendy");
+  });
+
+  it("still serves receipts for orders placed before tokens existed", async () => {
+    await env.DB.prepare(
+      "INSERT INTO orders (number, name, contact, pickup_at, notes, status) VALUES (?, ?, ?, ?, ?, 'received')",
+    )
+      .bind("SN-900", "Legacy Customer", "legacy@example.com", "Today 9:00am", null)
+      .run();
+    const response = await get("/order/thanks?n=SN-900");
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Legacy");
   });
 });

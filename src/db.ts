@@ -19,6 +19,8 @@ export type CoffeeType = {
 export type OrderRow = {
   id: number;
   number: string;
+  /** Null on orders placed before tokens existed. */
+  token: string | null;
   name: string;
   contact: string;
   pickup_at: string;
@@ -43,7 +45,7 @@ export type OrderInput = {
 };
 
 export type OrderResult =
-  | { ok: true; id: number; number: string }
+  | { ok: true; id: number; number: string; token: string }
   | { ok: false; error: string; status: 400 };
 
 
@@ -150,11 +152,12 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Or
   }
 
   const placeholder = `TMP-${crypto.randomUUID()}`;
+  const token = crypto.randomUUID().replace(/-/g, "");
   const inserted = await db
     .prepare(
-      "INSERT INTO orders (number, name, contact, pickup_at, notes, status) VALUES (?, ?, ?, ?, ?, 'received')",
+      "INSERT INTO orders (number, name, contact, pickup_at, notes, status, token) VALUES (?, ?, ?, ?, ?, 'received', ?)",
     )
-    .bind(placeholder, name, contact, pickup_at, notes || null)
+    .bind(placeholder, name, contact, pickup_at, notes || null, token)
     .run();
   const id = inserted.meta.last_row_id;
   const number = `SN-${id + ORDER_NUMBER_OFFSET}`;
@@ -169,11 +172,26 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Or
   );
   if (statements.length) await db.batch(statements);
 
-  return { ok: true, id, number };
+  return { ok: true, id, number, token };
 }
 
-export async function getOrderByNumber(db: D1Database, number: string): Promise<OrderRow | null> {
-  return db.prepare("SELECT * FROM orders WHERE number = ?").bind(number).first<OrderRow>();
+/**
+ * Look an order up for its receipt. Orders created since 0003 carry a token and
+ * will only be returned when the caller presents it, so a sequential order
+ * number is not enough to read someone else's ticket.
+ */
+export async function getOrderForReceipt(
+  db: D1Database,
+  number: string,
+  token: string,
+): Promise<OrderRow | null> {
+  const order = await db
+    .prepare("SELECT * FROM orders WHERE number = ?")
+    .bind(number)
+    .first<OrderRow>();
+  if (!order) return null;
+  if (order.token && order.token !== token) return null;
+  return order;
 }
 
 export async function createMessage(

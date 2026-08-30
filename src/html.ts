@@ -116,7 +116,7 @@ const CSS = `
   --radius-sm: 12px;
   --radius-pill: 999px;
   --header-h: 60px;
-  --photo-filter: none;
+  --photo-filter: sepia(.12) saturate(1.04) brightness(.99);
 }
 @media (min-width: 800px) { :root { --header-h: 72px; } }
 
@@ -268,7 +268,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
 /* ---------- header ---------- */
 .site-header {
   position: sticky; top: 0; z-index: 50;
-  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  background: color-mix(in srgb, var(--paper) 95%, transparent);
   -webkit-backdrop-filter: saturate(1.4) blur(12px);
   backdrop-filter: saturate(1.4) blur(12px);
   border-bottom: 1px solid var(--line);
@@ -278,7 +278,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
   display: flex; align-items: center; gap: 1rem;
   min-height: var(--header-h);
 }
-.brand { display: inline-flex; align-items: center; gap: .55rem; text-decoration: none; color: var(--ink); flex: none; }
+.brand { display: inline-flex; align-items: center; gap: .55rem; min-height: 44px; text-decoration: none; color: var(--ink); flex: none; }
 .brand:hover { color: var(--ink); }
 .brand__mark { width: 30px; height: 30px; flex: none; }
 .brand__name { font-family: var(--serif); font-size: 1.22rem; font-weight: 600; letter-spacing: -.01em; line-height: 1; }
@@ -360,7 +360,10 @@ html:not(.no-js) .icon-btn { display: inline-flex; }
 .section-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: clamp(1.5rem, 3vw, 2.5rem); }
 .section-head h2 { margin: 0; }
 .section-head p { margin: 0; }
+.section-head a { display: inline-block; padding-block: 4px; }
 .rule-label {
+  font-family: var(--sans);
+  font-weight: 600;
   display: flex; align-items: center; gap: 1rem;
   font-size: var(--fs-xs); letter-spacing: .18em; text-transform: uppercase; font-weight: 600;
   color: var(--ink-2); margin: 0 0 1.5rem;
@@ -400,6 +403,8 @@ html:not(.no-js) .icon-btn { display: inline-flex; }
 .card__actions select { flex: 1 1 100%; width: 100%; }
 .card__actions .stepper { flex: 0 0 auto; }
 .card__actions .btn { flex: 1 1 5rem; }
+.btn.is-added { background: var(--good-bg); color: var(--good-ink); }
+.btn.is-added:hover { color: var(--good-ink); }
 .card--out { opacity: .72; }
 .card--out .card__media img { filter: grayscale(.75); }
 
@@ -463,7 +468,7 @@ select {
 }
 .catnav {
   position: sticky; top: var(--header-h); z-index: 40;
-  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  background: color-mix(in srgb, var(--paper) 96%, transparent);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
@@ -489,7 +494,8 @@ select {
 @media (min-width: 1040px) { .slip { position: sticky; top: calc(var(--header-h) + 1.25rem); } }
 .slip h2 { font-size: 1.2rem; margin: 0 0 .25rem; }
 .slip__lines { list-style: none; margin: 1rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .8rem; }
-.slip__line { display: grid; grid-template-columns: 1fr auto; gap: .15rem .75rem; padding-bottom: .8rem; border-bottom: 1px dashed var(--line); }
+@keyframes slip-in { from { opacity: 0; transform: translateY(4px); } }
+.slip__line { animation: slip-in .2s cubic-bezier(.2,.7,.3,1); display: grid; grid-template-columns: 1fr auto; gap: .15rem .75rem; padding-bottom: .8rem; border-bottom: 1px dashed var(--line); }
 .slip__line:last-child { border-bottom: 0; padding-bottom: 0; }
 .slip__name { font-weight: 600; font-size: var(--fs-sm); }
 .slip__meta { grid-column: 1; font-size: var(--fs-xs); color: var(--ink-2); display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
@@ -506,7 +512,7 @@ select {
 .dock {
   position: sticky; bottom: 0; z-index: 45;
   display: flex; align-items: center; gap: 1rem;
-  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  background: color-mix(in srgb, var(--paper) 97%, transparent);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border-top: 1px solid var(--line);
@@ -524,7 +530,8 @@ select {
 .night p { color: var(--night-ink-2); }
 .night .kicker { color: #e8a683; }
 .night a:not(.btn) { color: #e8a683; }
-.split { display: grid; gap: clamp(1.75rem, 4vw, 3.5rem); align-items: center; }
+.split { display: grid; gap: clamp(1.75rem, 4vw, 3.5rem); align-items: start; }
+.split--center { align-items: center; }
 @media (min-width: 860px) { .split { grid-template-columns: 1fr 1fr; } }
 .split--wide-left { }
 @media (min-width: 860px) { .split--wide-left { grid-template-columns: 1.15fr .85fr; } }
@@ -560,7 +567,8 @@ select {
 .footer-grid { display: grid; gap: 2rem; grid-template-columns: 1fr; }
 @media (min-width: 700px) { .footer-grid { grid-template-columns: 1.4fr 1fr 1fr; } }
 .site-footer h3 { font-family: var(--sans); font-size: var(--fs-xs); letter-spacing: .18em; text-transform: uppercase; color: var(--night-ink-2); margin: 0 0 .9rem; }
-.site-footer ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .55rem; font-size: var(--fs-sm); }
+.site-footer ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .4rem; font-size: var(--fs-sm); }
+.site-footer ul a, .strip a, .hours a, .stack a { display: inline-block; padding-block: 4px; }
 .site-footer .brand__name { color: var(--night-ink); }
 .footer-bottom { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(244,236,226,.15); font-size: var(--fs-xs); display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; justify-content: space-between; }
 .footer-bottom p { margin: 0; }
@@ -711,6 +719,7 @@ function structuredData(drinks: CoffeeType[]): string {
       },
     ],
     acceptsReservations: false,
+    hasMap: mapsHref(),
     hasMenu: {
       "@type": "Menu",
       url: `https://${site.domain}/menu`,
@@ -787,7 +796,7 @@ ${header(path)}
 ${body}
 </main>
 ${footer()}
-${structuredData(drinks ?? [])}
+${drinks && drinks.length ? structuredData(drinks) : ""}
 <script>${CHROME_JS}</script>
 </body>
 </html>`;
@@ -826,7 +835,7 @@ const CHROME_JS = `
     try { saved = JSON.parse(localStorage.getItem("sn-last-order") || "null"); } catch (e) {}
     if (saved && saved.n) {
       var link = document.createElement("a");
-      link.href = "/order/thanks?n=" + encodeURIComponent(saved.n);
+      link.href = "/order/thanks?n=" + encodeURIComponent(saved.n) + (saved.t ? "&t=" + encodeURIComponent(saved.t) : "");
       link.textContent = "View order " + saved.n;
       recall.textContent = saved.at ? "Your last order — pickup " + saved.at + ". " : "Your last order. ";
       recall.appendChild(link);
@@ -1040,14 +1049,14 @@ export function homePage(
 
   <section class="night">
     <div class="wrap section">
-      <div class="split split--wide-left">
+      <div class="split split--center split--wide-left">
         <div>
           <p class="kicker">How it works</p>
           <h2>Three steps, no card details.</h2>
           <ol class="steps">
             <li><span data-n aria-hidden="true">1</span><span><b>Build your slip</b><span class="small">Pick your drinks and a pickup time.</span></span></li>
             <li><span data-n aria-hidden="true">2</span><span><b>We make it fresh</b><span class="small">Your ticket prints behind the bar.</span></span></li>
-            <li><span data-n aria-hidden="true">3</span><span><b>Pay at the counter</b><span class="small">Card or cash, when you collect.</span></span></li>
+            <li><span data-n aria-hidden="true">3</span><span><b>Pay at the counter</b><span class="small">Settle up when you collect, not before.</span></span></li>
           </ol>
           <p class="btn-row" style="margin-top:1.5rem"><a class="btn btn--onnight" href="/menu">Start an order</a></p>
         </div>
@@ -1162,9 +1171,9 @@ export function orderPage(
     .map((cat, i) => {
       const group = drinks.filter((d) => d.category === cat);
       return `<section class="menu-cat" id="cat-${esc(cat)}" aria-labelledby="cat-${esc(cat)}-h">
-        <p class="rule-label" id="cat-${esc(cat)}-h">${esc(CATEGORY_LABEL[cat] ?? cat)}${
+        <h2 class="rule-label" id="cat-${esc(cat)}-h">${esc(CATEGORY_LABEL[cat] ?? cat)}${
           CATEGORY_NOTE[cat] ? ` — ${esc(CATEGORY_NOTE[cat])}` : ""
-        }</p>
+        }</h2>
         <div class="grid">${group.map((d, j) => drinkCard(d, true, i === 0 && j === 0)).join("")}</div>
       </section>`;
     })
@@ -1218,7 +1227,7 @@ export function orderPage(
         <p class="slip__empty" id="slip-empty">Empty so far — add something from the menu.</p>
         <ul class="slip__lines" id="slip-lines" hidden></ul>
         <p class="slip__total" id="slip-total" hidden><span>Total at pickup</span><span id="slip-sum">$0.00</span></p>
-        <p class="slip__note">Pay by card or cash when you collect. Closed Mondays.</p>
+        <p class="slip__note">Nothing is taken now — you pay when you collect. Closed Mondays.</p>
         <a class="btn btn--wide js-only" href="#details" id="slip-continue" hidden>Add your details</a>
         <p class="sr-only" id="slip-live" role="status" aria-live="polite"></p>
       </aside>
@@ -1510,12 +1519,30 @@ const ORDER_JS = `
     announce(qty + " " + drink.name + " added. Slip total " + money(total()) + ".");
   }
 
+  /* Hold the label in a closure, so a double tap cannot leave "Added" stuck on. */
+  function confirmAdd(button) {
+    if (button.dataset.busy) return;
+    var original = button.innerHTML;
+    button.dataset.busy = "1";
+    button.classList.add("is-added");
+    button.innerHTML = "Added \u2713";
+    setTimeout(function () {
+      button.innerHTML = original;
+      button.classList.remove("is-added");
+      delete button.dataset.busy;
+    }, 1200);
+  }
+
   form.addEventListener("click", function (event) {
     var el = event.target.closest ? event.target.closest("button") : null;
     if (!el) return;
 
     var addSlug = el.getAttribute("data-add");
-    if (addSlug) { add(addSlug); return; }
+    if (addSlug) {
+      add(addSlug);
+      confirmAdd(el);
+      return;
+    }
 
     var step = el.getAttribute("data-step");
     if (step) {
@@ -1677,7 +1704,7 @@ export function thanksPage(order: OrderRow, lines: OrderLine[], totalCents: numb
   <script>
   try {
     localStorage.removeItem("sn-slip-v1");
-    localStorage.setItem("sn-last-order", JSON.stringify({ n: ${jsonScript(order.number)}, at: ${jsonScript(order.pickup_at)} }));
+    localStorage.setItem("sn-last-order", JSON.stringify({ n: ${jsonScript(order.number)}, at: ${jsonScript(order.pickup_at)}, t: ${jsonScript(order.token ?? "")} }));
   } catch (e) {}
   </script>`;
 

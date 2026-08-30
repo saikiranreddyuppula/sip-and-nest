@@ -3,7 +3,7 @@ import { site } from "./config";
 import {
   createMessage,
   createOrder,
-  getOrderByNumber,
+  getOrderForReceipt,
   listAllDrinks,
   listMenu,
   listOrderLines,
@@ -23,6 +23,10 @@ import {
 } from "./html";
 
 export type AppEnv = { Bindings: Env & { ASSETS: Fetcher } };
+
+function receiptPath(number: string, token: string): string {
+  return `/order/thanks?n=${encodeURIComponent(number)}&t=${encodeURIComponent(token)}`;
+}
 
 const app = new Hono<AppEnv>();
 
@@ -142,7 +146,7 @@ app.get("/order", (c) => c.redirect("/menu", 302));
 app.get("/order/thanks", async (c) => {
   const number = (c.req.query("n") ?? "").trim();
   if (!number) return c.html(notFoundPage(), 404);
-  const order = await getOrderByNumber(c.env.DB, number);
+  const order = await getOrderForReceipt(c.env.DB, number, (c.req.query("t") ?? "").trim());
   if (!order) return c.html(notFoundPage(), 404);
   const lines = await listOrderLines(c.env.DB, order.id);
   return c.html(thanksPage(order, lines, orderTotalCents(lines)));
@@ -178,9 +182,9 @@ app.post("/api/order", async (c) => {
     return c.html(orderPage(drinks, result.error, undefined, values), result.status);
   }
   if (wantsJson(c)) {
-    return c.json({ ok: true, number: result.number, status: "received" });
+    return c.json({ ok: true, number: result.number, token: result.token, status: "received" });
   }
-  return c.redirect(`/order/thanks?n=${encodeURIComponent(result.number)}`, 303);
+  return c.redirect(receiptPath(result.number, result.token), 303);
 });
 
 app.post("/order", async (c) => {
@@ -190,7 +194,7 @@ app.post("/order", async (c) => {
     const drinks = await listAllDrinks(c.env.DB);
     return c.html(orderPage(drinks, result.error, undefined, values), result.status);
   }
-  return c.redirect(`/order/thanks?n=${encodeURIComponent(result.number)}`, 303);
+  return c.redirect(receiptPath(result.number, result.token), 303);
 });
 
 app.post("/api/message", async (c) => {
