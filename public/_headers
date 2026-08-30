@@ -1,0 +1,13 @@
+# Photography and icons are content-addressed by name; a day of caching with a
+# week of stale-while-revalidate keeps repeat visits instant without pinning a
+# stale photo if one gets replaced.
+/img/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/og.jpg
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+/apple-touch-icon.png
+  Cache-Control: public, max-age=604800
+/icon-192.png
+  Cache-Control: public, max-age=604800
+/icon-512.png
+  Cache-Control: public, max-age=604800

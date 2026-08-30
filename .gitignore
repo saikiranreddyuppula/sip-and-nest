@@ -6,3 +6,5 @@ dist/
 *.log
 .DS_Store
 coverage/
+worker-configuration.d.ts
+package-lock.json
