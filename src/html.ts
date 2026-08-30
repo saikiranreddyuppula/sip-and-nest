@@ -1156,7 +1156,7 @@ export function homePage(
           <h2>Three steps, no card details.</h2>
           <ol class="steps">
             <li><span data-n aria-hidden="true">1</span><span><b>Build your slip</b><span class="small">Pick your drinks and a pickup time.</span></span></li>
-            <li><span data-n aria-hidden="true">2</span><span><b>We make it fresh</b><span class="small">Your ticket prints behind the bar.</span></span></li>
+            <li><span data-n aria-hidden="true">2</span><span><b>We make it fresh</b><span class="small">The order lands with the bar.</span></span></li>
             <li><span data-n aria-hidden="true">3</span><span><b>Pay at the counter</b><span class="small">Settle up when you collect, not before.</span></span></li>
           </ol>
           <p class="btn-row" style="margin-top:1.5rem"><a class="btn btn--onnight" href="/menu">Start an order</a></p>
@@ -1205,10 +1205,10 @@ export function homePage(
     <div class="split">
       <div>
         <p class="kicker">About</p>
-        <h2 id="about-h">A specialty bar, not a drive-through.</h2>
+        <h2 id="about-h">A small bar, one machine, made to order.</h2>
         <p class="lede">Espresso in the morning, shaken over ice through the afternoon, and espresso martinis before we close.</p>
         <p class="muted">Everything is made to order, which is why ordering ahead helps. There is a notes box on every order — tell us how you take it and we will make it that way.</p>
-        <p class="muted">Closed Mondays so the bar gets a day off.</p>
+        <p class="muted">Closed Mondays.</p>
       </div>
       <div id="contact" style="scroll-margin-top:calc(var(--header-h) + 1rem)">
         ${contactForm(opts.notice, opts.error, opts.values)}
@@ -1235,9 +1235,9 @@ const CATEGORY_LABEL: Record<string, string> = {
 };
 
 const CATEGORY_NOTE: Record<string, string> = {
-  specialty: "The reason people drive over.",
+  specialty: "What the bar is built around.",
   coffee: "The everyday order, made properly.",
-  pastry: "Made in the morning, gone by the afternoon.",
+  pastry: "Something sweet, by the slice.",
   tea: "For the afternoon nest.",
 };
 
@@ -1845,7 +1845,7 @@ export function thanksPage(order: OrderRow, lines: OrderLine[], totalCents: numb
       </div>
       <div class="info-card">
         <h2 style="margin-top:0;font-size:1.15rem">Need to change it?</h2>
-        <p class="small muted">Give us a ring and quote ${esc(order.number)} — we can adjust anything up to the moment we make it.</p>
+        <p class="small muted">Give the bar a ring and quote ${esc(order.number)}.</p>
         <p class="btn-row"><a class="btn" href="/menu">Order something else</a></p>
       </div>
     </div>

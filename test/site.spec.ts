@@ -721,3 +721,32 @@ describe("structured data", () => {
     expect(page).toContain('property="og:image:type" content="image/jpeg"');
   });
 });
+
+describe("copy stays inside what the data supports", () => {
+  it("makes no claim about facilities, printers or service guarantees", async () => {
+    const pages = [await html("/"), await html("/menu")];
+    const invented = [
+      /drive-?through/i,
+      /ticket prints/i,
+      /gone by the afternoon/i,
+      /we can adjust anything/i,
+      /free (lot|parking)/i,
+      /\bwifi\b/i,
+      /card or cash/i,
+      /step(s)? up to the door/i,
+    ];
+    for (const page of pages) {
+      for (const pattern of invented) {
+        expect(pattern.test(page), `page asserts ${pattern}`).toBe(false);
+      }
+    }
+  });
+
+  it("states hours, address and phone exactly as configured", async () => {
+    const page = await html("/");
+    expect(page).toContain("112 Hartness Dr, Holly Springs, NC");
+    expect(page).toContain("(919) 555-0148");
+    expect(page).toContain("7:30am");
+    expect(page).toContain("Closed Mondays");
+  });
+});
