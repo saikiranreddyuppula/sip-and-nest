@@ -13,6 +13,10 @@
     { "pattern": "sipandnest.com", "custom_domain": true },
     { "pattern": "www.sipandnest.com", "custom_domain": true }
   ],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
   "d1_databases": [
     {
       "binding": "DB",

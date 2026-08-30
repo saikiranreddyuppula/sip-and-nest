@@ -1,16 +1,16 @@
 export const site = {
   name: "Sip & Nest",
   legalName: "Sip and Nest",
-  city: "Chicago",
-  neighborhood: "North Side",
-  address: "2147 W Wilson Avenue, Chicago, IL 60625",
-  phone: "(773) 555-0148",
+  city: "Holly Springs",
+  neighborhood: "Holly Springs",
+  address: "112 Hartness Dr, Holly Springs, NC",
+  phone: "(919) 555-0148",
   email: "hello@sipandnest.com",
   hours: "Tuesday–Sunday, 7:30am–4pm",
   hoursNote: "Closed Monday",
   hoursShort: "Tue–Sun 7:30am–4pm",
   pickupCopy:
-    "We'll have it on the counter under your name. No payment online — settle up when you pick up. Closed Mondays.",
+    "Pay at pickup — no online payment. We'll have it on the counter under your name. Closed Mondays.",
   owner: "Sai Reddy",
   domain: "sipandnest.com",
 } as const;

@@ -2,7 +2,7 @@
   "name": "sip-and-nest",
   "version": "1.0.0",
   "private": true,
-  "description": "Sip & Nest — neighborhood cafe site for Sai Reddy, Chicago.",
+  "description": "Sip & Nest — specialty cafe site for Sai Reddy, Holly Springs, NC.",
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
