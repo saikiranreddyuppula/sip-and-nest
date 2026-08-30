@@ -41,50 +41,57 @@ a:hover { color: var(--espresso); }
 .pad { padding-left: 1.15rem; padding-right: 1.15rem; }
 header.site {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.55rem 1rem;
+  gap: 0.1rem;
   position: sticky;
   top: 0;
   z-index: 40;
-  background: var(--cream);
-  padding: max(0.7rem, env(safe-area-inset-top)) 1.15rem 0.7rem;
+  background: color-mix(in srgb, var(--cream) 92%, white);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--rule);
+  padding: max(0.85rem, env(safe-area-inset-top)) 1.15rem 0.35rem;
 }
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.45rem;
   text-decoration: none;
   color: inherit;
-  min-height: 44px;
 }
 .mark {
-  width: 40px;
-  height: 40px;
+  width: 26px;
+  height: 26px;
   object-fit: contain;
   flex: none;
 }
 .wordmark {
-  font-family: Palatino, "Palatino Linotype", "Iowan Old Style", Georgia, serif;
-  font-size: 1.35rem;
-  letter-spacing: 0.01em;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  font-weight: 560;
   line-height: 1;
-  font-weight: 600;
 }
-nav.links { display: flex; flex-wrap: wrap; gap: 0.15rem 0.15rem; }
+nav.links {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+}
 nav.links a {
-  color: var(--espresso);
+  color: var(--mute);
   text-decoration: none;
-  min-height: 44px;
-  min-width: 44px;
+  min-height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 0.7rem;
-  font-size: 0.95rem;
+  padding: 0 1.15rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 500;
 }
-nav.links a[aria-current="page"], nav.links a:hover { color: var(--copper); }
+nav.links a[aria-current="page"], nav.links a:hover { color: var(--espresso); }
 h1, h2, .serif {
   font-family: Palatino, "Palatino Linotype", "Iowan Old Style", Georgia, serif;
   font-weight: 600;
@@ -271,14 +278,20 @@ footer.site p { margin: 0.25rem 0; }
   padding: 0 0.4rem;
   cursor: pointer;
 }
+
+.about {
+  margin: 2.4rem 0 0;
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--rule);
+}
+.about h2 { margin-bottom: 0.45rem; }
+.about .lede { margin-bottom: 1rem; }
 `.trim();
 
 function nav(path: string): string {
   const items = [
     ["/", "Home"],
     ["/menu", "Menu"],
-    ["/order", "Order"],
-    ["/about", "About"],
   ] as const;
   return `<nav class="links">${items
     .map(([href, label]) => {
@@ -338,7 +351,7 @@ function drinkTiles(drinks: CoffeeType[], withAdd: boolean, eagerFirst = false):
             </select>
             <button type="button" class="btn" data-add="${esc(d.slug)}">Add</button>
           </div>`
-        : `<a class="btn" href="/order">Add</a>`;
+        : `<a class="btn" href="/menu">Add</a>`;
       return `<article class="drink">
         ${img}
         <div class="drink-meta">
@@ -352,7 +365,8 @@ function drinkTiles(drinks: CoffeeType[], withAdd: boolean, eagerFirst = false):
     .join("")}</div>`;
 }
 
-export function homePage(drinks: CoffeeType[]): string {
+export function homePage(drinks: CoffeeType[], notice?: string): string {
+  const flash = notice ? `<p class="flash">${esc(notice)}</p>` : "";
   const body = `
     <div class="hero">
       <img src="/img/hero.webp" alt="Espresso martini at the bar" width="1200" height="750" fetchpriority="high" decoding="async">
@@ -364,11 +378,28 @@ export function homePage(drinks: CoffeeType[]): string {
       ${drinkTiles(drinks, false, true)}
       <section class="bar">
         <h2>The bar</h2>
-        <img class="machine" src="/img/machine.webp" alt="Espresso machine" width="1200" height="800" loading="lazy" decoding="async">
+        <img class="machine" src="/img/machine.webp?v=2" alt="Espresso machine at Sip and Nest" width="1200" height="800" loading="lazy" decoding="async">
         <p class="where">${esc(site.address)}</p>
         <p class="where">${esc(site.hoursShort)} · ${esc(site.hoursNote)}</p>
       </section>
-      <p class="actions"><a class="btn" href="/order">Order ahead</a></p>
+      <p class="actions"><a class="btn" href="/menu">Order ahead</a></p>
+      <section id="about" class="about">
+        <p class="kicker">About</p>
+        <h2>A specialty cafe on Hartness</h2>
+        <p class="lede">Espresso martinis, shaken drinks, a quiet counter. Pay when you pick up. Closed Mondays.</p>
+        <p class="where">${esc(site.email)}</p>
+        ${flash}
+        <h2>Leave a note</h2>
+        <form method="post" action="/api/message">
+          <label for="mname">Name</label>
+          <input id="mname" name="name" required maxlength="80">
+          <label for="mcontact">Phone or email</label>
+          <input id="mcontact" name="contact" required maxlength="120">
+          <label for="mbody">Message</label>
+          <textarea id="mbody" name="body" required maxlength="1000"></textarea>
+          <p style="margin-top:1rem"><button class="btn" type="submit">Send</button></p>
+        </form>
+      </section>
     </div>`;
   return layout("Home", "/", body);
 }
@@ -379,24 +410,8 @@ const CATEGORY_LABEL: Record<string, string> = {
   pastry: "From the case",
 };
 
-export function menuPage(drinks: CoffeeType[]): string {
-  const cats: string[] = [];
-  for (const d of drinks) if (!cats.includes(d.category)) cats.push(d.category);
-  const sections = cats
-    .map((cat) => {
-      const group = drinks.filter((d) => d.category === cat);
-      return `<p class="cat-label">${esc(CATEGORY_LABEL[cat] ?? cat)}</p>${drinkTiles(group, false)}`;
-    })
-    .join("");
-  const body = `
-    <div class="pad">
-      <p class="kicker">The board</p>
-      <h1>Menu</h1>
-      <p class="lede">Specialty drinks, a couple of coffees, one pastry. Pay at pickup.</p>
-      ${sections}
-      <p class="actions" style="margin-top:1.8rem"><a class="btn" href="/order">Order ahead</a></p>
-    </div>`;
-  return layout("Menu", "/menu", body);
+export function menuPage(drinks: CoffeeType[], error?: string, notice?: string): string {
+  return orderPage(drinks, error, notice);
 }
 
 export function orderPage(drinks: CoffeeType[], error?: string, notice?: string): string {
@@ -535,7 +550,7 @@ export function orderPage(drinks: CoffeeType[], error?: string, notice?: string)
       render();
     })();
     </script>`;
-  return layout("Order ahead", "/order", body);
+  return layout("Menu", "/menu", body);
 }
 
 export function thanksPage(order: OrderRow): string {
@@ -551,32 +566,11 @@ export function thanksPage(order: OrderRow): string {
       </div>
       <p class="actions"><a class="btn" href="/menu">Back to the menu</a></p>
     </div>`;
-  return layout("Order received", "/order", body);
+  return layout("Order received", "/menu", body);
 }
 
 export function aboutPage(notice?: string): string {
-  const flash = notice ? `<p class="flash">${esc(notice)}</p>` : "";
-  const body = `
-    <img class="word-sign" src="/img/coffee-bar.png" alt="Coffee Bar" width="560" height="280">
-    <div class="pad">
-      <p class="kicker">Holly Springs</p>
-      <h1>Sip &amp; Nest</h1>
-      <p class="lede">A specialty cafe on Hartness Drive. Espresso martinis, shaken drinks, a quiet counter. Pay when you pick up.</p>
-      <img class="machine" src="/img/machine.webp" alt="Espresso machine" width="1200" height="800" loading="lazy" decoding="async">
-      <p class="where">${esc(site.address)}<br>${esc(site.hours)}. ${esc(site.hoursNote)}.<br>${esc(site.email)}</p>
-      ${flash}
-      <h2>Leave a note</h2>
-      <form method="post" action="/api/message">
-        <label for="mname">Name</label>
-        <input id="mname" name="name" required maxlength="80">
-        <label for="mcontact">Phone or email</label>
-        <input id="mcontact" name="contact" required maxlength="120">
-        <label for="mbody">Message</label>
-        <textarea id="mbody" name="body" required maxlength="1000"></textarea>
-        <p style="margin-top:1rem"><button class="btn" type="submit">Send</button></p>
-      </form>
-    </div>`;
-  return layout("About", "/about", body);
+  return homePage([]);
 }
 
 export function notFoundPage(): string {
