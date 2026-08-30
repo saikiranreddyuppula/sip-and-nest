@@ -175,9 +175,9 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Or
     ...lines.map((line) =>
       db
         .prepare(
-          "INSERT INTO order_items (order_id, coffee_type_id, size, qty, price_cents, note) VALUES (?, ?, ?, ?, ?, ?)",
+          "INSERT INTO order_items (order_id, coffee_type_id, name, size, qty, price_cents, note) VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
-        .bind(id, line.drink.id, line.size.label, line.qty, line.size.cents, line.note || null),
+        .bind(id, line.drink.id, line.drink.name, line.size.label, line.qty, line.size.cents, line.note || null),
     ),
   ]);
 
@@ -233,9 +233,12 @@ export type OrderLine = {
 export async function listOrderLines(db: D1Database, orderId: number): Promise<OrderLine[]> {
   const { results } = await db
     .prepare(
-      `SELECT c.name AS name, i.size AS size, i.qty AS qty, i.price_cents AS price_cents, i.note AS note
+      // LEFT JOIN with the stored name first: a drink leaving the menu must not
+      // shrink a receipt that already went out.
+      `SELECT COALESCE(i.name, c.name, 'Item') AS name, i.size AS size, i.qty AS qty,
+              i.price_cents AS price_cents, i.note AS note
        FROM order_items i
-       JOIN coffee_types c ON c.id = i.coffee_type_id
+       LEFT JOIN coffee_types c ON c.id = i.coffee_type_id
        WHERE i.order_id = ?
        ORDER BY i.id`,
     )

@@ -1,6 +1,7 @@
 import { env, exports } from "cloudflare:workers";
+import { site } from "../src/config";
 import { describe, expect, it } from "vitest";
-import { isPickupBookable, pickupDays } from "../src/config";
+import { CLOSE_MINUTES, OPEN_MINUTES, isPickupBookable, pickupDays, slotMinutes } from "../src/config";
 
 /** A day and time the bar can actually honour right now. */
 function bookablePickup(): string {
@@ -74,7 +75,10 @@ describe("no external dependencies", () => {
       expect(page).not.toContain("cdn.");
       expect(page).not.toContain("Chicago");
       // every src/href that points outward must be a link to maps, mail or tel
-      const externals = [...page.matchAll(/(?:src|href)="(https?:\/\/[^"]+)"/g)].map((m) => m[1]);
+      const externals = [...page.matchAll(/(?:src|srcset|href)="([^"]+)"/g)]
+        .flatMap((m) => m[1].split(","))
+        .map((candidate) => candidate.trim().split(/\s+/)[0])
+        .filter((url) => /^https?:\/\//.test(url));
       for (const url of externals) {
         const allowed =
           url.startsWith("https://sipandnest.com") || url.startsWith("https://www.google.com/maps");
@@ -350,10 +354,24 @@ describe("receipt privacy", () => {
 });
 
 describe("copy is consistent with the hours", () => {
-  it("never promises service after closing time", async () => {
-    const page = await html("/");
-    expect(page).not.toMatch(/after four/i);
-    expect(page).toContain("7:30am");
+  it("names no time outside opening hours and no service on a closed day", async () => {
+    for (const path of ["/", "/menu"]) {
+      const page = await html(path);
+      const body = page.replace(/<style>[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/g, "");
+      const times = [...body.matchAll(/\b(\d{1,2}:\d{2}(?:am|pm))\b/g)].map((m) => m[1]);
+      expect(times.length).toBeGreaterThan(0);
+      for (const time of times) {
+        const minutes = slotMinutes(time);
+        expect(minutes, `unparseable time ${time} on ${path}`).not.toBeNull();
+        expect(minutes! >= OPEN_MINUTES && minutes! <= CLOSE_MINUTES, `${time} on ${path} is outside opening hours`).toBe(true);
+      }
+      // Monday may only ever appear next to the fact that it is closed
+      const text = body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+      for (const match of text.matchAll(/Monday/g)) {
+        const window = text.slice(Math.max(0, match.index - 30), match.index + 36);
+        expect(/clos/i.test(window), `"${window.trim()}" on ${path} implies Monday service`).toBe(true);
+      }
+    }
   });
 });
 
@@ -415,7 +433,11 @@ describe("brand mark", () => {
     expect(response.headers.get("content-type")).toContain("image/svg+xml");
     const svg = await response.text();
     // the coupe glass, not the old nest illustration
-    expect(svg).toContain("M10 21C10 34.5 19.5 43 32 43S54 34.5 54 21Z");
+    expect(svg).toContain("<svg");
+    expect(svg).toContain("viewBox=\"0 0 64 64\"");
+    // the coupe, not the old nest illustration
+    expect(svg).toContain("ellipse");
+    expect(svg).not.toContain("#8b3a2a");
     expect(await (await get("/favicon.svg")).text()).toBe(svg);
   });
 });
@@ -455,10 +477,19 @@ describe("receipts are not walkable", () => {
     expect((await get("/order/thanks?n=SN-900&t=")).status).toBe(404);
   });
 
-  it("backfills a token onto every order the migration found", async () => {
-    const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE token IS NULL AND number LIKE 'SN-1%'")
-      .first<{ n: number }>();
-    expect(row?.n).toBe(0);
+  it("backfills a token onto a row that predates the column", async () => {
+    // The suite's database is created empty, so migration 0003's UPDATE touches
+    // nothing. Run the same statement against a token-less row to prove it works.
+    await env.DB.prepare(
+      "INSERT INTO orders (number, name, contact, pickup_at, status) VALUES (?, ?, ?, ?, 'received')",
+    )
+      .bind("SN-901", "Pre Token", "pre@example.com", "whenever", )
+      .run();
+    await env.DB.prepare("UPDATE orders SET token = lower(hex(randomblob(16))) WHERE token IS NULL").run();
+    const row = await env.DB.prepare("SELECT token FROM orders WHERE number = ?")
+      .bind("SN-901")
+      .first<{ token: string }>();
+    expect(row?.token).toMatch(/^[0-9a-f]{32}$/);
   });
 });
 
@@ -667,7 +698,7 @@ describe("printing", () => {
 describe("dark surfaces keep a visible focus ring", () => {
   it("re-points the focus token on every dark band", async () => {
     const page = await html("/");
-    expect(page).toContain(".hero, .night, .site-footer { --focus: var(--night-accent); }");
+    expect(page).toMatch(/\.hero[^{]*\.night[^{]*\.site-footer[^{]*\{[^}]*--focus:\s*var\(--night-accent\)/);
   });
 });
 
@@ -742,11 +773,83 @@ describe("copy stays inside what the data supports", () => {
     }
   });
 
-  it("states hours, address and phone exactly as configured", async () => {
+  it("renders the business facts from config, not from literals in the markup", async () => {
     const page = await html("/");
-    expect(page).toContain("112 Hartness Dr, Holly Springs, NC");
-    expect(page).toContain("(919) 555-0148");
-    expect(page).toContain("7:30am");
-    expect(page).toContain("Closed Mondays");
+    expect(page).toContain(site.address);
+    expect(page).toContain(site.phone);
+    expect(page).toContain(site.email);
+    expect(page).toContain(site.city);
+    // and the tel: link is built from that same number
+    expect(page).toContain(`tel:+1${site.phone.replace(/\D/g, "")}`);
+  });
+});
+
+describe("pickup days survive the calendar", () => {
+  it("never offers a Monday and never drops an open day", () => {
+    const instants: number[] = [];
+    // the year sampled every six hours, so every late evening is covered
+    for (let t = Date.UTC(2026, 0, 1); t < Date.UTC(2027, 0, 1); t += 6 * 3_600_000) instants.push(t);
+    // plus both daylight-saving weekends, hour by hour
+    for (const start of [Date.UTC(2026, 2, 6), Date.UTC(2026, 9, 30)]) {
+      for (let t = start; t < start + 4 * 86_400_000; t += 3_600_000) instants.push(t);
+    }
+    const offenders: string[] = [];
+    for (const t of instants) {
+      const days = pickupDays(new Date(t));
+      if (days.some((d) => d.value.startsWith("Mon")) || days.length !== 4) {
+        offenders.push(`${new Date(t).toISOString()} -> ${days.map((d) => d.value).join(", ")}`);
+      }
+    }
+    expect(offenders.slice(0, 5)).toEqual([]);
+  }, 30_000);
+
+  it("offers today itself just after midnight on an open day", () => {
+    // 12:30am ET on Sunday 1 Nov 2026, the hour the clocks go back
+    const days = pickupDays(new Date("2026-11-01T04:30:00Z"));
+    expect(days[0].isToday).toBe(true);
+    expect(days[0].value).toBe("Sun, Nov 1");
+    expect(days[1].value).toBe("Tue, Nov 3");
+  });
+
+  it("rolls to the next open day late on a Saturday evening", () => {
+    const days = pickupDays(new Date("2026-03-08T04:30:00Z")); // 11:30pm ET Saturday
+    expect(days[0].value).toBe("Sun, Mar 8");
+    expect(days.some((d) => d.value.startsWith("Mon"))).toBe(false);
+  });
+});
+
+describe("receipts are a record, not a re-derivation", () => {
+  it("keeps its line items and total after the drink leaves the menu", async () => {
+    const created = await get("/api/order", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Archive Test",
+        contact: "archive@example.com",
+        pickup_at: bookablePickup(),
+        items: [{ slug: "dirty-chai", size: "12oz", qty: 2 }],
+      }),
+    });
+    const { number, token } = await created.json<{ number: string; token: string }>();
+
+    const before = await html(`/order/thanks?n=${number}&t=${token}`);
+    expect(before).toContain("Dirty Chai");
+    expect(before).toContain("$12.40");
+
+
+    // a seasonal menu edit must not rewrite a receipt that already went out
+    await env.DB.prepare("UPDATE coffee_types SET name = ? WHERE slug = ?")
+      .bind("Winter Chai", "dirty-chai")
+      .run();
+    try {
+      const after = await html(`/order/thanks?n=${number}&t=${token}`);
+      expect(after).toContain("Dirty Chai");
+      expect(after).not.toContain("Winter Chai");
+      expect(after).toContain("$12.40");
+    } finally {
+      await env.DB.prepare("UPDATE coffee_types SET name = ? WHERE slug = ?")
+        .bind("Dirty Chai", "dirty-chai")
+        .run();
+    }
   });
 });

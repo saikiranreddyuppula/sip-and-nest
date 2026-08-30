@@ -22,7 +22,12 @@ npm run dev                      # http://127.0.0.1:8787
 ```sh
 npm test                         # vitest against the Worker + a local D1
 npm run typecheck                # tsc --noEmit (run `npm run types` first)
+npm run test:browser             # the inline scripts, in a real browser (needs `npm run dev` running)
 ```
+
+`npm test` runs inside the Workers runtime, which has no DOM, so the slip, the
+pickup-slot trimming and the theme toggle are only covered by
+`npm run test:browser` — see `test/browser/README.md`.
 
 ## Layout
 
@@ -34,6 +39,7 @@ npm run typecheck                # tsc --noEmit (run `npm run types` first)
 | `src/config.ts` | address, hours, phone, pickup slots |
 | `migrations/` | schema and the seeded menu |
 | `public/` | photography, icons, and `_headers` |
+| `test/browser/` | Chromium checks for the inline scripts |
 
 `public/` is the deployed asset bundle, and Workers Assets answers those paths
 *before* the Worker runs — so caching for `/img/*` is declared in

@@ -45,37 +45,56 @@ export const TIMEZONE = "America/New_York";
 
 export type PickupDay = { value: string; label: string; isToday: boolean };
 
-/** The cafe's own wall clock, whatever timezone the visitor or the edge is in. */
+/** The cafe's own wall clock and calendar date, whatever timezone the caller is in. */
 export function cafeNow(now: Date = new Date()): {
   weekday: number;
   minutes: number;
-  parts: Record<string, string>;
+  year: number;
+  month: number;
+  day: number;
 } {
   const parts: Record<string, string> = {};
   for (const part of new Intl.DateTimeFormat("en-US", {
     timeZone: TIMEZONE,
     weekday: "short",
-    day: "numeric",
-    month: "short",
     year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   }).formatToParts(now)) {
     parts[part.type] = part.value;
   }
-  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday ?? "");
-  const hour = Number(parts.hour) % 24;
-  return { weekday, minutes: hour * 60 + Number(parts.minute), parts };
+  return {
+    weekday: WEEKDAYS.indexOf(parts.weekday ?? ""),
+    minutes: (Number(parts.hour) % 24) * 60 + Number(parts.minute),
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+  };
 }
 
-function dayLabel(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
+const WEEKDAYS: readonly string[] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/**
+ * Both the weekday and the label come from formatting the same instant, so they
+ * cannot drift. Anchoring at midday UTC keeps the calendar date stable across
+ * both daylight-saving transitions and across late evenings, when the UTC date
+ * has already rolled over but the cafe's has not.
+ */
+function candidate(base: { year: number; month: number; day: number }, offset: number): { weekday: string; label: string } {
+  const at = new Date(Date.UTC(base.year, base.month - 1, base.day + offset, 12));
+  const parts: Record<string, string> = {};
+  for (const part of new Intl.DateTimeFormat("en-US", {
     timeZone: TIMEZONE,
     weekday: "short",
     day: "numeric",
     month: "short",
-  }).format(date);
+  }).formatToParts(at)) {
+    parts[part.type] = part.value;
+  }
+  return { weekday: parts.weekday ?? "", label: `${parts.weekday}, ${parts.month} ${parts.day}` };
 }
 
 /**
@@ -84,16 +103,14 @@ function dayLabel(date: Date): string {
  * form cannot book a pickup on a closed day or a time that has already gone.
  */
 export function pickupDays(now: Date = new Date(), count = 4): PickupDay[] {
-  const { weekday, minutes } = cafeNow(now);
+  const base = cafeNow(now);
   const lastSlot = slotMinutes(pickupSlots[pickupSlots.length - 1]) ?? CLOSE_MINUTES;
   const days: PickupDay[] = [];
   for (let offset = 0; days.length < count && offset < 14; offset++) {
-    const date = new Date(now.getTime() + offset * 86_400_000);
-    const day = (weekday + offset) % 7;
-    if (day === CLOSED_WEEKDAY) continue;
-    if (offset === 0 && minutes >= lastSlot) continue;
-    const value = dayLabel(date);
-    days.push({ value, label: offset === 0 ? `Today — ${value}` : value, isToday: offset === 0 });
+    const { weekday, label } = candidate(base, offset);
+    if (WEEKDAYS.indexOf(weekday) === CLOSED_WEEKDAY) continue;
+    if (offset === 0 && base.minutes >= lastSlot) continue;
+    days.push({ value: label, label: offset === 0 ? `Today — ${label}` : label, isToday: offset === 0 });
   }
   return days;
 }

@@ -1118,7 +1118,7 @@ export function homePage(
     })}</div>
     <div class="wrap hero__inner">
       <p class="kicker">Holly Springs, North Carolina</p>
-      <h1>Serious espresso, a quiet seat, and a martini before four.</h1>
+      <h1>Serious espresso, shaken cold, and a martini before four.</h1>
       <p class="hero__lede">A small specialty coffee bar on Hartness Drive. Order ahead, walk in, and pay at the counter — it will be waiting under your name.</p>
       <div class="btn-row">
         <a class="btn btn--lg btn--onnight" href="/menu">Order ahead</a>
@@ -1130,7 +1130,7 @@ export function homePage(
 
   <section class="strip">
     <div class="wrap strip__inner">
-      <span class="strip__item"><strong>Today</strong> Tue–Sun, 7:30am–4pm</span>
+      <span class="strip__item"><strong>Hours</strong> Tue–Sun, 7:30am–4pm · closed Monday</span>
       <span class="strip__item"><a href="${mapsHref()}" target="_blank" rel="noopener">${esc(site.address)}</a></span>
       <span class="strip__item"><a href="tel:${telHref()}">${esc(site.phone)}</a></span>
       <span class="strip__item"><strong>Pay at pickup</strong> no card needed online</span>
@@ -1156,7 +1156,7 @@ export function homePage(
           <h2>Three steps, no card details.</h2>
           <ol class="steps">
             <li><span data-n aria-hidden="true">1</span><span><b>Build your slip</b><span class="small">Pick your drinks and a pickup time.</span></span></li>
-            <li><span data-n aria-hidden="true">2</span><span><b>We make it fresh</b><span class="small">The order lands with the bar.</span></span></li>
+            <li><span data-n aria-hidden="true">2</span><span><b>You get an order number</b><span class="small">Keep it — it is your ticket.</span></span></li>
             <li><span data-n aria-hidden="true">3</span><span><b>Pay at the counter</b><span class="small">Settle up when you collect, not before.</span></span></li>
           </ol>
           <p class="btn-row" style="margin-top:1.5rem"><a class="btn btn--onnight" href="/menu">Start an order</a></p>
@@ -1205,7 +1205,7 @@ export function homePage(
     <div class="split">
       <div>
         <p class="kicker">About</p>
-        <h2 id="about-h">A small bar, one machine, made to order.</h2>
+        <h2 id="about-h">Made to order, one drink at a time.</h2>
         <p class="lede">Espresso in the morning, shaken over ice through the afternoon, and espresso martinis before we close.</p>
         <p class="muted">Everything is made to order, which is why ordering ahead helps. There is a notes box on every order — tell us how you take it and we will make it that way.</p>
         <p class="muted">Closed Mondays.</p>
