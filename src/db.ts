@@ -1,4 +1,4 @@
-import { ORDER_NUMBER_OFFSET } from "./config";
+import { ORDER_NUMBER_OFFSET, isPickupBookable } from "./config";
 
 export type Size = { label: string; cents: number };
 
@@ -115,6 +115,14 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Or
   const pickup_at = (input.pickup_at ?? "").trim();
   if (!pickup_at || pickup_at.length > 80) {
     return { ok: false, error: "Choose a pickup time.", status: 400 };
+  }
+  // A closed Monday, or a slot that has already gone by while the page sat open.
+  if (!isPickupBookable(pickup_at)) {
+    return {
+      ok: false,
+      error: "We cannot make that one — pick a day and time from the list.",
+      status: 400,
+    };
   }
   const notes = (input.notes ?? "").trim().slice(0, 400);
   const items = Array.isArray(input.items) ? input.items : [];

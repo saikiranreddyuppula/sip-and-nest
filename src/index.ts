@@ -105,16 +105,14 @@ async function readOrderInput(c: Context<AppEnv>): Promise<ReadOrder> {
   const form = await parseForm(c);
   const pickupAt =
     asString(form.pickup_at) ||
-    `${asString(form.pickup_day)} ${asString(form.pickup_slot)}`.trim();
+    `${asString(form.pickup_day)} \u00b7 ${asString(form.pickup_slot)}`.trim();
   let items = parseItems(form.items);
-  if (!items.length && asString(form.slug)) {
-    items = [
-      {
-        slug: asString(form.slug),
-        size: asString(form.size),
-        qty: Number(form.qty || 1),
-      },
-    ];
+  if (!items.length) {
+    const [slug, size] = asString(form.choice).split("|");
+    if (slug && size) items = [{ slug, size, qty: Number(form.qty || 1) }];
+    else if (asString(form.slug)) {
+      items = [{ slug: asString(form.slug), size: asString(form.size), qty: Number(form.qty || 1) }];
+    }
   }
   return {
     input: {

@@ -1,4 +1,4 @@
-import { pickupSlots, site } from "./config";
+import { pickupDays, pickupSlots, site } from "./config";
 import {
   formatCents,
   parseSizes,
@@ -827,6 +827,12 @@ const CHROME_JS = `
       paint();
     });
     paint();
+    if (window.matchMedia) {
+      var scheme = window.matchMedia("(prefers-color-scheme: dark)");
+      var onChange = function () { if (!stored()) paint(); };
+      if (scheme.addEventListener) scheme.addEventListener("change", onChange);
+      else if (scheme.addListener) scheme.addListener(onChange);
+    }
   }
 
   /* --- the last order placed on this device, so the number is never lost --- */
@@ -1194,7 +1200,17 @@ export function orderPage(
       ? `<p class="notice notice--good" role="status">${esc(notice)}</p>`
       : "";
 
-  const sizeLabels = [...new Set(drinks.flatMap((d) => parseSizes(d.sizes_json).map((s) => s.label)))];
+  const days = pickupDays();
+  // Without JS there is no way to filter sizes per drink, so each option is a
+  // real drink-and-size pair rather than a union that is wrong for most rows.
+  const noscriptChoices = drinks
+    .filter((d) => d.available)
+    .flatMap((d) =>
+      parseSizes(d.sizes_json).map((size) => ({
+        value: `${d.slug}|${size.label}`,
+        label: `${d.name} · ${size.label} · ${formatCents(size.cents)}`,
+      })),
+    );
 
   const body = `
   <div class="wrap page-head">
@@ -1262,10 +1278,16 @@ export function orderPage(
           <div class="field">
             <label for="pickup_day">Pickup day</label>
             <select id="pickup_day" name="pickup_day">
-              ${["Today", "Tomorrow"]
-                .map((d) => `<option value="${d}"${values.pickup_day === d ? " selected" : ""}>${d}</option>`)
+              ${days
+                .map(
+                  (d) =>
+                    `<option value="${esc(d.value)}"${d.isToday ? ' data-today="1"' : ""}${
+                      values.pickup_day === d.value ? " selected" : ""
+                    }>${esc(d.label)}</option>`,
+                )
                 .join("")}
             </select>
+            <p class="field__hint">Closed Mondays, so they are not on the list.</p>
           </div>
           <div class="field">
             <label for="pickup_slot">Pickup time</label>
@@ -1286,19 +1308,14 @@ export function orderPage(
 
         <noscript>
           <p class="notice notice--bad">JavaScript is off, so pick one item here and send it through.</p>
-          <div class="field">
-            <label for="slug">Drink</label>
-            <select id="slug" name="slug">
-              ${drinks
-                .filter((d) => d.available)
-                .map((d) => `<option value="${esc(d.slug)}">${esc(d.name)}</option>`)
-                .join("")}
-            </select>
-          </div>
           <div class="field-row">
             <div class="field">
-              <label for="size">Size</label>
-              <select id="size" name="size">${sizeLabels.map((l) => `<option>${esc(l)}</option>`).join("")}</select>
+              <label for="choice">Drink and size</label>
+              <select id="choice" name="choice">
+                ${noscriptChoices
+                  .map((c) => `<option value="${esc(c.value)}">${esc(c.label)}</option>`)
+                  .join("")}
+              </select>
             </div>
             <div class="field">
               <label for="qty">Quantity</label>
@@ -1344,7 +1361,7 @@ const ORDER_JS = `
 
   var menu = [];
   try { menu = JSON.parse(dataEl.textContent || "[]"); } catch (e) { return; }
-  var bySlug = {};
+  var bySlug = Object.create(null);
   menu.forEach(function (d) { bySlug[d.slug] = d; });
 
   var STORE = "sn-slip-v1";
@@ -1504,21 +1521,25 @@ const ORDER_JS = `
 
   function add(slug) {
     var drink = bySlug[slug];
-    if (!drink) return;
+    if (!drink) return false;
     var picker = document.querySelector('[data-size="' + CSS.escape(slug) + '"]');
     var label = picker ? picker.value : (drink.sizes[0] && drink.sizes[0].label);
     var size = sizeFor(slug, label);
-    if (!size) return;
+    if (!size) return false;
     var qty = cardQty(slug);
 
     var existing = null;
     cart.forEach(function (line) { if (line.slug === slug && line.size === size.label) existing = line; });
     if (existing) {
+      if (existing.qty >= MAX_QTY) {
+        announce("Six " + drink.name + " is the most we can put on one line. Give the bar a call for more.");
+        return false;
+      }
       existing.qty = Math.min(MAX_QTY, existing.qty + qty);
     } else {
       if (cart.length >= MAX_LINES) {
         announce("That is as much as one ticket holds. Give the bar a call for a big order.");
-        return;
+        return false;
       }
       cart.push({ slug: slug, size: size.label, qty: qty });
     }
@@ -1526,6 +1547,17 @@ const ORDER_JS = `
     save();
     render();
     announce(qty + " " + drink.name + " added. Slip total " + money(total()) + ".");
+    return true;
+  }
+
+  /* After a line disappears, land on a Remove button — never on a stepper, or a
+     second press would delete the next line too. */
+  function restFocusAfterRemoval(index) {
+    var buttons = document.querySelectorAll("#slip-lines [data-remove]");
+    var next = buttons[Math.min(index, buttons.length - 1)];
+    if (next) { next.focus(); return; }
+    var heading = document.getElementById("slip-h");
+    if (heading) { heading.setAttribute("tabindex", "-1"); heading.focus(); }
   }
 
   /* Hold the label in a closure, so a double tap cannot leave "Added" stuck on. */
@@ -1548,8 +1580,7 @@ const ORDER_JS = `
 
     var addSlug = el.getAttribute("data-add");
     if (addSlug) {
-      add(addSlug);
-      confirmAdd(el);
+      if (add(addSlug)) confirmAdd(el);
       return;
     }
 
@@ -1566,12 +1597,17 @@ const ORDER_JS = `
       var line = cart[i];
       if (!line) return;
       line.qty = line.qty + parseInt(lineStep, 10);
-      if (line.qty < 1) cart.splice(i, 1); else line.qty = Math.min(MAX_QTY, line.qty);
+      var removed = line.qty < 1;
+      if (removed) cart.splice(i, 1); else line.qty = Math.min(MAX_QTY, line.qty);
       save();
       render();
-      announce("Slip updated. Total " + money(total()) + ".");
-      var same = document.querySelector('#slip-lines [data-line="' + i + '"][data-line-step="' + lineStep + '"]');
-      if (same) same.focus();
+      announce(removed ? "Line removed. Total " + money(total()) + "." : "Slip updated. Total " + money(total()) + ".");
+      if (removed) {
+        restFocusAfterRemoval(i);
+      } else {
+        var same = document.querySelector('#slip-lines [data-line="' + i + '"][data-line-step="' + lineStep + '"]');
+        if (same) same.focus();
+      }
       return;
     }
 
@@ -1583,10 +1619,7 @@ const ORDER_JS = `
       save();
       render();
       announce((name ? name.name : "Item") + " removed. Total " + money(total()) + ".");
-      var buttons = document.querySelectorAll("#slip-lines [data-remove]");
-      var next = buttons[Math.min(index, buttons.length - 1)];
-      if (next) next.focus();
-      else { var heading = document.getElementById("slip-h"); if (heading) { heading.setAttribute("tabindex", "-1"); heading.focus(); } }
+      restFocusAfterRemoval(index);
     }
   });
 
@@ -1614,10 +1647,15 @@ const ORDER_JS = `
     } catch (e) { return null; }
   }
 
+  function isToday() {
+    var opt = daySel && daySel.selectedOptions[0];
+    return !!(opt && opt.getAttribute("data-today"));
+  }
+
   function trimSlots() {
     if (!daySel || !slotSel) return;
     var minutes = nowMinutesET();
-    var today = daySel.value === "Today";
+    var today = isToday();
     var firstOpen = null;
     var anyOpen = false;
     Array.prototype.forEach.call(slotSel.options, function (opt) {
@@ -1627,16 +1665,16 @@ const ORDER_JS = `
       opt.hidden = past;
       if (!past) { anyOpen = true; if (firstOpen === null) firstOpen = opt; }
     });
-    if (!anyOpen && today) {
-      daySel.value = "Tomorrow";
-      if (slotHint) slotHint.textContent = "Today is done — this is set to tomorrow.";
+    if (!anyOpen && today && daySel.selectedIndex + 1 < daySel.options.length) {
+      daySel.selectedIndex = daySel.selectedIndex + 1;
       trimSlots();
+      if (slotHint) slotHint.textContent = "Today is done — moved to the next day we are open.";
       return;
     }
     if (slotSel.selectedOptions[0] && slotSel.selectedOptions[0].disabled && firstOpen) {
       firstOpen.selected = true;
     }
-    if (slotHint && anyOpen) {
+    if (slotHint) {
       slotHint.textContent = today
         ? "Only times we can still make today."
         : "Pickups run 7:30am to 3:30pm.";
@@ -1644,6 +1682,10 @@ const ORDER_JS = `
   }
 
   if (daySel) daySel.addEventListener("change", trimSlots);
+  // A tab left open all afternoon must not still be offering this morning.
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) trimSlots();
+  });
   trimSlots();
 
   form.addEventListener("submit", function (event) {
@@ -1657,9 +1699,17 @@ const ORDER_JS = `
       if (first) first.focus();
       return;
     }
-    var day = daySel ? daySel.value : "Today";
+    trimSlots();
+    var slotOption = slotSel && slotSel.selectedOptions[0];
+    if (slotSel && (!slotOption || slotOption.disabled)) {
+      event.preventDefault();
+      announce("That pickup time has passed. Pick another one.");
+      slotSel.focus();
+      return;
+    }
+    var day = daySel ? daySel.value : "";
     var slot = slotSel ? slotSel.value : "";
-    document.getElementById("pickup_at").value = (day + " " + slot).trim();
+    document.getElementById("pickup_at").value = (day + " \u00b7 " + slot).trim();
     document.getElementById("items").value = JSON.stringify(cart);
   });
 

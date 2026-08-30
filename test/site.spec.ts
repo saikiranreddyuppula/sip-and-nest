@@ -1,5 +1,13 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import { isPickupBookable, pickupDays } from "../src/config";
+
+/** A day and time the bar can actually honour right now. */
+function bookablePickup(): string {
+  const days = pickupDays();
+  const day = days.find((d) => !d.isToday) ?? days[0];
+  return `${day.value} \u00b7 3:30pm`;
+}
 
 const worker = exports.default;
 const ORIGIN = "https://sipandnest.com";
@@ -173,7 +181,7 @@ describe("ordering", () => {
       body: JSON.stringify({
         name: "Sai Reddy",
         contact: "312-555-0148",
-        pickup_at: "Tomorrow 9:00am",
+        pickup_at: bookablePickup(),
         notes: "extra foam",
         items: [{ slug: "espresso-martini", size: "5oz", qty: 2 }],
       }),
@@ -202,7 +210,7 @@ describe("ordering", () => {
       body: JSON.stringify({
         name: "Maya Fisher",
         contact: "maya@example.com",
-        pickup_at: "Today 10:30am",
+        pickup_at: bookablePickup(),
         items: [
           { slug: "espresso-martini", size: "5oz", qty: 2 },
           { slug: "tiramisu", size: "slice", qty: 1 },
@@ -218,7 +226,7 @@ describe("ordering", () => {
     expect(page).toContain("Tiramisu");
     // 2 x $12.00 + 1 x $7.50
     expect(page).toContain("$31.50");
-    expect(page).toContain("Today 10:30am");
+    expect(page).toContain(bookablePickup());
   });
 
   it("404s an unknown order number", async () => {
@@ -233,7 +241,7 @@ describe("ordering", () => {
       body: JSON.stringify({
         name: "Sai",
         contact: "saisk73@gmail.com",
-        pickup_at: "Today 8:00am",
+        pickup_at: bookablePickup(),
         items: [{ slug: "espresso-martini", size: "5oz", qty: 7 }],
       }),
     });
@@ -245,7 +253,7 @@ describe("ordering", () => {
       body: JSON.stringify({
         name: "Sai",
         contact: "",
-        pickup_at: "Today 8:00am",
+        pickup_at: bookablePickup(),
         items: [{ slug: "espresso-martini", size: "5oz", qty: 1 }],
       }),
     });
@@ -256,7 +264,7 @@ describe("ordering", () => {
     const body = new URLSearchParams({
       name: "Maya",
       contact: "maya@example.com",
-      pickup_at: "Today 10:30am",
+      pickup_at: bookablePickup(),
       items: JSON.stringify([{ slug: "tiramisu", size: "slice", qty: 1 }]),
     });
     const response = await get("/api/order", {
@@ -326,7 +334,7 @@ describe("receipt privacy", () => {
       body: JSON.stringify({
         name: "Private Person",
         contact: "private@example.com",
-        pickup_at: "Today 11:00am",
+        pickup_at: bookablePickup(),
         items: [{ slug: "affogato", size: "one", qty: 1 }],
       }),
     });
@@ -353,7 +361,7 @@ describe("failed orders keep the customer's work", () => {
     const body = new URLSearchParams({
       name: "Jordan O'Neill",
       contact: "not a contact",
-      pickup_day: "Tomorrow",
+      pickup_day: pickupDays()[0].value,
       pickup_slot: "9:30am",
       notes: "Oat milk & one fork",
       items: JSON.stringify([{ slug: "affogato", size: "one", qty: 1 }]),
@@ -369,7 +377,7 @@ describe("failed orders keep the customer's work", () => {
     expect(page).toContain('value="Jordan O&#39;Neill"');
     expect(page).toContain('value="not a contact"');
     expect(page).toContain("Oat milk &amp; one fork");
-    expect(page).toContain('<option value="Tomorrow" selected>Tomorrow</option>');
+    expect(page).toContain(`value="${pickupDays()[0].value}"`);
     expect(page).toContain("<option selected>9:30am</option>");
   });
 });
@@ -388,7 +396,7 @@ describe("sold out items", () => {
         body: JSON.stringify({
           name: "Test",
           contact: "test@example.com",
-          pickup_at: "Today 9:00am",
+          pickup_at: bookablePickup(),
           items: [{ slug: "affogato", size: "one", qty: 1 }],
         }),
       });
@@ -419,7 +427,7 @@ describe("receipts are not walkable", () => {
       body: JSON.stringify({
         name: "Wendy Alcott",
         contact: "wendy@example.com",
-        pickup_at: "Today 2:00pm",
+        pickup_at: bookablePickup(),
         notes: "leave it with the barista",
         items: [{ slug: "espresso-tonic", size: "12oz", qty: 1 }],
       }),
@@ -440,7 +448,7 @@ describe("receipts are not walkable", () => {
     await env.DB.prepare(
       "INSERT INTO orders (number, name, contact, pickup_at, notes, status) VALUES (?, ?, ?, ?, ?, 'received')",
     )
-      .bind("SN-900", "Legacy Customer", "legacy@example.com", "Today 9:00am", null)
+      .bind("SN-900", "Legacy Customer", "legacy@example.com", bookablePickup(), null)
       .run();
     expect((await get("/order/thanks?n=SN-900")).status).toBe(404);
     expect((await get("/order/thanks?n=SN-900&t=")).status).toBe(404);
@@ -526,5 +534,83 @@ describe("contact form", () => {
       .bind("spam@example.com")
       .first<{ n: number }>();
     expect(row?.n).toBe(0);
+  });
+});
+
+describe("pickup days", () => {
+  it("never offers a Monday, because the bar is shut", () => {
+    // walk a whole week of "now" values, not just today
+    for (let offset = 0; offset < 7; offset++) {
+      const now = new Date(Date.UTC(2026, 8, 1 + offset, 15, 0, 0));
+      for (const day of pickupDays(now)) {
+        expect(day.value.startsWith("Mon"), `${day.value} offered on ${now.toISOString()}`).toBe(false);
+      }
+    }
+  });
+
+  it("drops today once the last slot has passed", () => {
+    const morning = pickupDays(new Date(Date.UTC(2026, 8, 2, 12, 0, 0))); // 8am ET, Wednesday
+    expect(morning[0].isToday).toBe(true);
+    const evening = pickupDays(new Date(Date.UTC(2026, 8, 3, 1, 0, 0))); // 9pm ET Wednesday
+    expect(evening.every((d) => !d.isToday)).toBe(true);
+  });
+
+  it("rejects a pickup on a closed day or a time that has gone", () => {
+    expect(isPickupBookable("Mon 7 Sep \u00b7 9:00am")).toBe(false);
+    expect(isPickupBookable("not a day \u00b7 9:00am")).toBe(false);
+    expect(isPickupBookable("Tomorrow 9:00am")).toBe(false);
+    expect(isPickupBookable(`${pickupDays()[0].value} \u00b7 25:00pm`)).toBe(false);
+    expect(isPickupBookable(bookablePickup())).toBe(true);
+  });
+
+  it("refuses an order booked for a day the bar is closed", async () => {
+    const response = await get("/api/order", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Monday Person",
+        contact: "monday@example.com",
+        pickup_at: "Mon 7 Sep \u00b7 9:00am",
+        items: [{ slug: "affogato", size: "one", qty: 1 }],
+      }),
+    });
+    expect(response.status).toBe(400);
+    const body = await response.json<{ error: string }>();
+    expect(body.error).toContain("pick a day and time from the list");
+  });
+
+  it("offers the menu page only open days, labelled absolutely", async () => {
+    const page = await html("/menu");
+    expect(page).not.toContain('<option value="Tomorrow"');
+    for (const day of pickupDays()) expect(page).toContain(`value="${day.value}"`);
+    expect(page).toContain("Closed Mondays, so they are not on the list.");
+  });
+});
+
+describe("no-javascript ordering", () => {
+  it("offers real drink-and-size pairs, not a union of every size", async () => {
+    const page = await html("/menu");
+    expect(page).toContain('value="espresso-martini|5oz"');
+    expect(page).toContain('value="tiramisu|slice"');
+    // the martini only comes in 5oz, so no other size may be pairable with it
+    expect(page).not.toContain('value="espresso-martini|12oz"');
+  });
+
+  it("accepts a single-item post from the fallback form", async () => {
+    const body = new URLSearchParams({
+      name: "No Script",
+      contact: "noscript@example.com",
+      pickup_day: pickupDays()[0].value,
+      pickup_slot: "3:30pm",
+      choice: "tiramisu|slice",
+      qty: "2",
+    });
+    const response = await get("/api/order", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+      redirect: "manual",
+    });
+    expect(response.status).toBe(303);
   });
 });
