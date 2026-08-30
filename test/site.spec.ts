@@ -614,3 +614,58 @@ describe("no-javascript ordering", () => {
     expect(response.status).toBe(303);
   });
 });
+
+describe("rejected fields are addressable", () => {
+  it("marks the offending order field invalid and points it at the message", async () => {
+    const body = new URLSearchParams({
+      name: "Jo",
+      contact: "nope",
+      pickup_day: pickupDays()[0].value,
+      pickup_slot: "9:30am",
+      items: JSON.stringify([{ slug: "affogato", size: "one", qty: 1 }]),
+    });
+    const response = await get("/api/order", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    expect(response.status).toBe(400);
+    const page = await response.text();
+    expect(page).toContain('id="contact"');
+    expect(page).toMatch(/id="contact"[^>]*aria-invalid="true"/);
+    expect(page).toMatch(/id="contact"[^>]*aria-describedby="order-error"/);
+    // and the field that is fine must not be flagged
+    expect(page).not.toMatch(/id="name"[^>]*aria-invalid/);
+  });
+
+  it("marks the offending note field invalid", async () => {
+    const body = new URLSearchParams({ name: "Jo", contact: "jo@example.com", body: "" });
+    const response = await get("/api/message", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    expect(response.status).toBe(400);
+    const page = await response.text();
+    expect(page).toMatch(/id="mbody"[^>]*aria-invalid="true"/);
+  });
+});
+
+describe("printing", () => {
+  it("forces a light palette so a receipt printed from dark mode is readable", async () => {
+    const page = await html("/");
+    const printBlocks = [...page.matchAll(/@media print \{([\s\S]*?)\n\}/g)].map((m) => m[1]);
+    expect(printBlocks.length).toBeGreaterThan(0);
+    const palette = printBlocks.join("\n");
+    expect(palette).toContain("--paper: #fff");
+    expect(palette).toContain("--ink: #000");
+    expect(palette).toContain("--grain: 0");
+  });
+});
+
+describe("dark surfaces keep a visible focus ring", () => {
+  it("re-points the focus token on every dark band", async () => {
+    const page = await html("/");
+    expect(page).toContain(".hero, .night, .site-footer { --focus: var(--night-accent); }");
+  });
+});

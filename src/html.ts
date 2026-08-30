@@ -196,7 +196,12 @@ const CSS = `
 
 /* ---------- base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--header-h) + 1rem);
+  scroll-padding-bottom: 6rem;
+}
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
@@ -234,9 +239,13 @@ h3 { font-size: var(--fs-h3); letter-spacing: -.005em; }
 p { margin: 0 0 1rem; }
 a { color: var(--accent-ink); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 a:hover { text-decoration-thickness: 2px; }
-:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
-a, button, input, select, textarea, summary { scroll-margin-top: calc(var(--header-h) + 1rem); }
-::selection { background: var(--accent); color: #fff; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 2px; }
+/* Dark bands keep the light theme's tokens, so they need their own ring. */
+.hero, .night, .site-footer { --focus: var(--night-accent); }
+a, button, input, select, textarea, summary { scroll-margin-top: calc(var(--header-h) + 1rem); scroll-margin-bottom: 5.5rem; }
+/* the menu page stacks a category bar under the header */
+#order-form :is(a, button, input, select, textarea), #details { scroll-margin-top: calc(var(--header-h) + 4.5rem); }
+::selection { background: var(--accent); color: var(--paper); }
 hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
 
 .wrap {
@@ -448,8 +457,8 @@ html:not(.no-js) .icon-btn { display: inline-flex; }
 .card__actions .btn { flex: 1 1 5rem; }
 .btn.is-added { background: var(--good-bg); color: var(--good-ink); }
 .btn.is-added:hover { color: var(--good-ink); }
-.card--out { opacity: .72; }
-.card--out .card__media img { filter: grayscale(.75); }
+.card--out .card__media img { filter: grayscale(.85) brightness(.96); }
+.card--out .card__name, .card--out .card__price { color: var(--ink-2); }
 
 /* ---------- form controls ---------- */
 label { display: block; font-size: var(--fs-sm); font-weight: 600; margin: 0 0 .35rem; }
@@ -484,6 +493,7 @@ select {
 .stepper output { min-width: 1.5rem; text-align: center; font-size: var(--fs-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* ---------- notices ---------- */
+input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--bad-ink); border-width: 2px; }
 .notice { border-radius: var(--radius-sm); padding: .85rem 1.1rem; margin: 0 0 1.5rem; font-size: var(--fs-sm); display: flex; gap: .6rem; }
 .notice--good { background: var(--good-bg); color: var(--good-ink); }
 .notice--bad { background: var(--bad-bg); color: var(--bad-ink); }
@@ -535,7 +545,14 @@ select {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 1.25rem; box-shadow: var(--shadow);
 }
-@media (min-width: 1040px) { .slip { position: sticky; top: calc(var(--header-h) + 1.25rem); } }
+@media (min-width: 1040px) {
+  .slip {
+    position: sticky;
+    top: calc(var(--header-h) + 1.25rem);
+    max-height: calc(100svh - var(--header-h) - 2.5rem);
+    overflow-y: auto;
+  }
+}
 .slip h2 { font-size: 1.2rem; margin: 0 0 .25rem; }
 .slip__lines { list-style: none; margin: 1rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .8rem; }
 @keyframes slip-in { from { opacity: 0; transform: translateY(4px); } }
@@ -619,8 +636,17 @@ select {
 
 /* ---------- print ---------- */
 @media print {
-  .site-header, .site-footer, .dock, .catnav, .btn { display: none !important; }
+  .site-header, .site-footer, .dock, .catnav, .btn, .hero, .strip { display: none !important; }
+  /* Force the light palette: a receipt printed from dark mode was unreadable. */
+  :root, :root[data-theme="dark"] {
+    --paper: #fff; --paper-2: #fff; --surface: #fff; --night: #fff;
+    --ink: #000; --ink-2: #333; --night-ink: #000; --night-ink-2: #333;
+    --accent: #000; --accent-ink: #000; --accent-soft: #fff;
+    --line: #999; --line-strong: #666; --field-line: #666;
+    --shadow: none; --shadow-lift: none; --photo-filter: none; --grain: 0;
+  }
   body { background: #fff; color: #000; }
+  .card, .info-card, .receipt, .slip { border-color: #999; box-shadow: none; }
 }
 `.trim();
 
@@ -681,7 +707,7 @@ function header(path: string): string {
     <nav class="site-nav" aria-label="Primary">${links}</nav>
     <div class="header-actions">
       <button type="button" class="icon-btn" id="theme-toggle" aria-pressed="false">
-        <span class="sr-only">Switch to dark theme</span>
+        <span class="sr-only">Dark theme</span>
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.7"></circle><path d="M12 3.4a8.6 8.6 0 0 1 0 17.2z" fill="currentColor"></path></svg>
       </button>
       <a class="btn header-cta" href="/menu">Order ahead</a>
@@ -856,11 +882,11 @@ const CHROME_JS = `
   function stored() { try { return localStorage.getItem("sn-theme"); } catch (e) { return null; } }
   function systemDark() { return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches; }
   function isDark() { var s = stored(); return s ? s === "dark" : systemDark(); }
+  /* Stable name, state carried by aria-pressed — a name that flips with the
+     state announces a contradiction. */
   function paint() {
     if (!toggle) return;
-    var dark = isDark();
-    toggle.setAttribute("aria-pressed", dark ? "true" : "false");
-    toggle.querySelector(".sr-only").textContent = dark ? "Switch to light theme" : "Switch to dark theme";
+    toggle.setAttribute("aria-pressed", isDark() ? "true" : "false");
   }
   if (toggle) {
     toggle.addEventListener("click", function () {
@@ -938,6 +964,21 @@ const CHROME_JS = `
 })();
 `.trim();
 
+/**
+ * Which control an error belongs to, so the field can be marked invalid and
+ * pointed at the message instead of the message just sitting nearby.
+ */
+function invalidAttrs(error: string | undefined, field: string, errorId: string): string {
+  if (!error) return "";
+  const owner =
+    error.startsWith("Name is required") ? "name"
+    : error.startsWith("A phone number or email") ? "contact"
+    : error.startsWith("Choose a pickup time") || error.startsWith("We cannot make that one") ? "pickup"
+    : error.startsWith("Write a short note") ? "body"
+    : "";
+  return owner === field ? ` aria-invalid="true" aria-describedby="${errorId}"` : "";
+}
+
 function priceLabel(drink: CoffeeType): string {
   const sizes = parseSizes(drink.sizes_json);
   if (!sizes.length) return formatCents(drink.price_cents);
@@ -959,7 +1000,7 @@ function drinkCard(drink: CoffeeType, interactive: boolean, eager = false, plate
         height: 800,
         sizes: CARD_SIZES,
         priority: eager,
-      })}${plate ? `<p class="card__plate">${String(plate).padStart(2, "0")}</p>` : ""}${
+      })}${plate ? `<p class="card__plate" aria-hidden="true">${String(plate).padStart(2, "0")}</p>` : ""}${
         soldOut
           ? `<p class="card__flag">Sold out today</p>`
           : drink.featured
@@ -1032,16 +1073,16 @@ function contactForm(notice?: string, error?: string, values: MessageFormValues 
     <form method="post" action="/api/message">
       <div class="field">
         <label for="mname">Your name</label>
-        <input id="mname" name="name" required maxlength="80" autocomplete="name" value="${esc(values.name ?? "")}">
+        <input id="mname" name="name" required maxlength="80" autocomplete="name" value="${esc(values.name ?? "")}"${invalidAttrs(error, "name", "note-error")}>
       </div>
       <div class="field">
         <label for="mcontact">Phone or email</label>
-        <input id="mcontact" name="contact" required maxlength="120" autocomplete="email" value="${esc(values.contact ?? "")}">
+        <input id="mcontact" name="contact" required maxlength="120" autocomplete="email" value="${esc(values.contact ?? "")}"${invalidAttrs(error, "contact", "note-error")}>
         <p class="field__hint" id="mcontact-hint">So we can write back.</p>
       </div>
       <div class="field">
         <label for="mbody">Message</label>
-        <textarea id="mbody" name="body" required maxlength="1000">${esc(values.body ?? "")}</textarea>
+        <textarea id="mbody" name="body" required maxlength="1000"${invalidAttrs(error, "body", "note-error")}>${esc(values.body ?? "")}</textarea>
       </div>
       <div class="trap" aria-hidden="true">
         <label for="mfax">Leave this empty</label>
@@ -1101,7 +1142,7 @@ export function homePage(
       </div>
       <p><a href="/menu">See the whole menu &rarr;</a></p>
     </div>
-    <div class="grid grid--fit">${highlights.map((d) => drinkCard(d, false)).join("")}</div>
+    <div class="grid${highlights.length === 3 ? " grid--fit" : ""}">${highlights.map((d) => drinkCard(d, false)).join("")}</div>
   </section>
 
   <section class="night">
@@ -1168,7 +1209,7 @@ export function homePage(
       </div>
       <div id="contact" style="scroll-margin-top:calc(var(--header-h) + 1rem)">
         ${contactForm(opts.notice, opts.error, opts.values)}
-        ${opts.error ? `<script>(function(){var e=document.getElementById("note-error");if(e){e.scrollIntoView({block:"center"});e.focus();}})();</script>` : ""}
+        ${opts.error ? `<script>(function(){var f=document.querySelector("#contact [aria-invalid='true']")||document.getElementById("note-error");if(f){f.scrollIntoView({block:"center"});f.focus();}})();</script>` : ""}
       </div>
     </div>
   </section>`;
@@ -1310,11 +1351,11 @@ export function orderPage(
         <div class="field-row">
           <div class="field">
             <label for="name">Name for the ticket</label>
-            <input id="name" name="name" required maxlength="80" autocomplete="name" value="${esc(values.name ?? "")}">
+            <input id="name" name="name" required maxlength="80" autocomplete="name" value="${esc(values.name ?? "")}"${invalidAttrs(error, "name", "order-error")}>
           </div>
           <div class="field">
             <label for="contact">Phone or email</label>
-            <input id="contact" name="contact" required maxlength="120" autocomplete="tel" value="${esc(values.contact ?? "")}">
+            <input id="contact" name="contact" required maxlength="120" autocomplete="tel" value="${esc(values.contact ?? "")}"${invalidAttrs(error, "contact", "order-error")}>
             <p class="field__hint">In case the bar needs to reach you.</p>
           </div>
         </div>
@@ -1335,7 +1376,7 @@ export function orderPage(
           </div>
           <div class="field">
             <label for="pickup_slot">Pickup time</label>
-            <select id="pickup_slot" name="pickup_slot">
+            <select id="pickup_slot" name="pickup_slot"${invalidAttrs(error, "pickup", "order-error")}>
               ${pickupSlots
                 .map((slot) => `<option${values.pickup_slot === slot ? " selected" : ""}>${slot}</option>`)
                 .join("")}
@@ -1378,7 +1419,7 @@ export function orderPage(
       <a class="btn" href="#details" id="dock-cta">Review order</a>
     </div>
   </form>
-  ${error ? `<script>(function(){var e=document.getElementById("order-error");if(e){e.focus();e.scrollIntoView({block:"center"});}})();</script>` : ""}
+  ${error ? `<script>(function(){var f=document.querySelector("#order-form [aria-invalid='true']")||document.getElementById("order-error");if(f){f.scrollIntoView({block:"center"});f.focus();}})();</script>` : ""}
   <script type="application/json" id="menu-data">${jsonScript(payload)}</script>
   <script>${ORDER_JS}</script>`;
 
@@ -1711,8 +1752,10 @@ const ORDER_JS = `
     });
     if (!anyOpen && today && daySel.selectedIndex + 1 < daySel.options.length) {
       daySel.selectedIndex = daySel.selectedIndex + 1;
+      var moved = daySel.value;
       trimSlots();
       if (slotHint) slotHint.textContent = "Today is done — moved to the next day we are open.";
+      announce("Today is finished, so pickup moved to " + moved + ".");
       return;
     }
     if (slotSel.selectedOptions[0] && slotSel.selectedOptions[0].disabled && firstOpen) {
