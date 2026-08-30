@@ -9,7 +9,7 @@ import {
   type OrderInput,
   type OrderItemInput,
 } from "./db";
-import { MARK_SVG, aboutPage, homePage, menuPage, notFoundPage, orderPage, thanksPage } from "./html";
+import { MARK_SVG, homePage, menuPage, notFoundPage, orderPage, thanksPage } from "./html";
 
 export type AppEnv = { Bindings: Env & { ASSETS: Fetcher } };
 
@@ -101,14 +101,11 @@ app.get("/", async (c) => {
 });
 
 app.get("/menu", async (c) => {
-  const drinks = await listMenu(c.env.DB);
+  const drinks = await listAllDrinks(c.env.DB);
   return c.html(menuPage(drinks));
 });
 
-app.get("/order", async (c) => {
-  const drinks = await listAllDrinks(c.env.DB);
-  return c.html(orderPage(drinks));
-});
+app.get("/order", (c) => c.redirect("/menu", 302));
 
 app.get("/order/thanks", async (c) => {
   const number = (c.req.query("n") ?? "").trim();
@@ -118,7 +115,7 @@ app.get("/order/thanks", async (c) => {
   return c.html(thanksPage(order));
 });
 
-app.get("/about", (c) => c.html(aboutPage()));
+app.get("/about", (c) => c.redirect("/#about", 302));
 
 app.get("/api/menu", async (c) => {
   const drinks = await listMenu(c.env.DB);
@@ -182,10 +179,12 @@ app.post("/api/message", async (c) => {
   const result = await createMessage(c.env.DB, name, contact, body);
   if (!result.ok) {
     if (wantsJson(c)) return c.json({ ok: false, error: result.error }, result.status);
-    return c.html(aboutPage(), result.status);
+    const drinks = await listMenu(c.env.DB);
+    return c.html(homePage(drinks), result.status);
   }
   if (wantsJson(c)) return c.json({ ok: true });
-  return c.html(aboutPage("Thanks — we got your note."));
+  const drinks = await listMenu(c.env.DB);
+  return c.html(homePage(drinks, "Thanks — we got your note."));
 });
 
 app.get("/robots.txt", (c) =>
@@ -193,7 +192,7 @@ app.get("/robots.txt", (c) =>
 );
 
 app.get("/sitemap.xml", (c) => {
-  const urls = ["/", "/menu", "/order", "/about"];
+  const urls = ["/", "/menu"];
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map((u) => `  <url><loc>https://${site.domain}${u}</loc></url>`).join("\n")}

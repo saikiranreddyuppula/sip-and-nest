@@ -16,6 +16,9 @@ describe("sip and nest", () => {
     expect(page).toContain("Sip &amp; Nest");
     expect(page).toContain("Holly Springs");
     expect(page).toContain("Hartness");
+    expect(page).toContain('id="about"');
+    expect(page).not.toMatch(/href="\/about"/);
+    expect(page).not.toContain(">About</a>");
     expect(page).toContain("Espresso Martini");
     expect(page).toMatch(/coffee-bar\.png|Coffee Bar/);
     expect(page).toContain("/img/espresso-martini");
@@ -31,7 +34,18 @@ describe("sip and nest", () => {
     expect(page).toContain("Espresso Martini");
     expect(page).toContain("Brown Sugar Shaken Espresso");
     expect(page).toContain("Tiramisu");
+    expect(page).toContain("Place order");
+    expect(page).toContain("Your slip");
     expect(page).not.toContain("fonts.googleapis.com");
+  });
+
+  it("order and about collapse into menu and home", async () => {
+    const order = await worker.fetch(new Request("https://sipandnest.com/order", { redirect: "manual" }));
+    expect(order.status).toBe(302);
+    expect(order.headers.get("location")).toBe("/menu");
+    const about = await worker.fetch(new Request("https://sipandnest.com/about", { redirect: "manual" }));
+    expect(about.status).toBe(302);
+    expect(about.headers.get("location")).toBe("/#about");
   });
 
   it("GET /api/menu returns coffee types", async () => {
