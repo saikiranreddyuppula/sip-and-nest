@@ -19,8 +19,7 @@ export type CoffeeType = {
 export type OrderRow = {
   id: number;
   number: string;
-  /** Null on orders placed before tokens existed. */
-  token: string | null;
+  token: string;
   name: string;
   contact: string;
   pickup_at: string;
@@ -161,37 +160,37 @@ export async function createOrder(db: D1Database, input: OrderInput): Promise<Or
     .run();
   const id = inserted.meta.last_row_id;
   const number = `SN-${id + ORDER_NUMBER_OFFSET}`;
-  await db.prepare("UPDATE orders SET number = ? WHERE id = ?").bind(number, id).run();
 
-  const statements = lines.map((line) =>
-    db
-      .prepare(
-        "INSERT INTO order_items (order_id, coffee_type_id, size, qty, price_cents, note) VALUES (?, ?, ?, ?, ?, ?)",
-      )
-      .bind(id, line.drink.id, line.size.label, line.qty, line.size.cents, line.note || null),
-  );
-  if (statements.length) await db.batch(statements);
+  // One batch, so the ticket never gets its real number without its items.
+  await db.batch([
+    db.prepare("UPDATE orders SET number = ? WHERE id = ?").bind(number, id),
+    ...lines.map((line) =>
+      db
+        .prepare(
+          "INSERT INTO order_items (order_id, coffee_type_id, size, qty, price_cents, note) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(id, line.drink.id, line.size.label, line.qty, line.size.cents, line.note || null),
+    ),
+  ]);
 
   return { ok: true, id, number, token };
 }
 
 /**
- * Look an order up for its receipt. Orders created since 0003 carry a token and
- * will only be returned when the caller presents it, so a sequential order
- * number is not enough to read someone else's ticket.
+ * Look an order up for its receipt. The sequential order number is never enough
+ * on its own — the caller has to present the order's token too, so a receipt
+ * cannot be reached by counting.
  */
 export async function getOrderForReceipt(
   db: D1Database,
   number: string,
   token: string,
 ): Promise<OrderRow | null> {
-  const order = await db
-    .prepare("SELECT * FROM orders WHERE number = ?")
-    .bind(number)
+  if (!token) return null;
+  return db
+    .prepare("SELECT * FROM orders WHERE number = ? AND token = ?")
+    .bind(number, token)
     .first<OrderRow>();
-  if (!order) return null;
-  if (order.token && order.token !== token) return null;
-  return order;
 }
 
 export async function createMessage(

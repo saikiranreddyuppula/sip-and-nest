@@ -436,14 +436,95 @@ describe("receipts are not walkable", () => {
     expect(await ok.text()).toContain("Wendy");
   });
 
-  it("still serves receipts for orders placed before tokens existed", async () => {
+  it("refuses a token-less row rather than grandfathering it in", async () => {
     await env.DB.prepare(
       "INSERT INTO orders (number, name, contact, pickup_at, notes, status) VALUES (?, ?, ?, ?, ?, 'received')",
     )
       .bind("SN-900", "Legacy Customer", "legacy@example.com", "Today 9:00am", null)
       .run();
-    const response = await get("/order/thanks?n=SN-900");
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain("Legacy");
+    expect((await get("/order/thanks?n=SN-900")).status).toBe(404);
+    expect((await get("/order/thanks?n=SN-900&t=")).status).toBe(404);
+  });
+
+  it("backfills a token onto every order the migration found", async () => {
+    const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE token IS NULL AND number LIKE 'SN-1%'")
+      .first<{ n: number }>();
+    expect(row?.n).toBe(0);
+  });
+});
+
+describe("bad requests do not 500", () => {
+  it("answers malformed, empty and non-object JSON bodies with a 400", async () => {
+    for (const body of ["", "{", "null", "[]", '"a string"', "12"]) {
+      for (const path of ["/api/order", "/api/message"]) {
+        const response = await get(path, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body,
+        });
+        expect(response.status, `${path} with body ${JSON.stringify(body)}`).toBe(400);
+      }
+    }
+  });
+
+  it("answers a JSON post with no body at all with a 400", async () => {
+    const response = await worker.fetch(
+      new Request(ORIGIN + "/api/order", { method: "POST", headers: { "content-type": "application/json" } }),
+    );
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("menu api", () => {
+  it("survives a malformed sizes_json row instead of 500ing", async () => {
+    await env.DB.prepare("UPDATE coffee_types SET sizes_json = ? WHERE slug = ?")
+      .bind("{not json", "affogato")
+      .run();
+    try {
+      const response = await get("/api/menu");
+      expect(response.status).toBe(200);
+      const body = await response.json<{ drinks: { slug: string; sizes: unknown[] }[] }>();
+      expect(body.drinks.find((d) => d.slug === "affogato")?.sizes).toEqual([]);
+    } finally {
+      await env.DB.prepare("UPDATE coffee_types SET sizes_json = ? WHERE slug = ?")
+        .bind('[{"label":"one","cents":700}]', "affogato")
+        .run();
+    }
+  });
+});
+
+describe("contact form", () => {
+  it("keeps what the visitor typed when the note is rejected", async () => {
+    const body = new URLSearchParams({ name: "Ada Lovelace", contact: "nope", body: "Do you cater?" });
+    const response = await get("/api/message", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    expect(response.status).toBe(400);
+    const page = await response.text();
+    expect(page).toContain('value="Ada Lovelace"');
+    expect(page).toContain('value="nope"');
+    expect(page).toContain("Do you cater?");
+  });
+
+  it("swallows a post that fills the honeypot without storing it", async () => {
+    const body = new URLSearchParams({
+      name: "Spam Bot",
+      contact: "spam@example.com",
+      body: "buy things",
+      fax: "http://spam.example",
+    });
+    const response = await get("/api/message", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+      redirect: "manual",
+    });
+    expect(response.status).toBe(303);
+    const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM messages WHERE contact = ?")
+      .bind("spam@example.com")
+      .first<{ n: number }>();
+    expect(row?.n).toBe(0);
   });
 });

@@ -7,6 +7,7 @@ import {
   listAllDrinks,
   listMenu,
   listOrderLines,
+  parseSizes,
   orderTotalCents,
   type OrderInput,
   type OrderItemInput,
@@ -16,6 +17,7 @@ import {
   MARK_SVG,
   homePage,
   menuPage,
+  errorPage,
   notFoundPage,
   orderPage,
   thanksPage,
@@ -38,6 +40,25 @@ function wantsJson(c: { req: { header: (name: string) => string | undefined } })
   }
   const accept = c.req.header("accept") ?? "";
   return accept.includes("application/json") && !accept.includes("text/html");
+}
+
+async function parseForm(c: Context<AppEnv>): Promise<Record<string, unknown>> {
+  try {
+    return await c.req.parseBody();
+  } catch {
+    return {};
+  }
+}
+
+/** c.req.json() rejects on an unparseable or empty body; treat that as bad input. */
+async function readJsonBody(c: Context<AppEnv>): Promise<Record<string, unknown> | null> {
+  try {
+    const body: unknown = await c.req.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+    return body as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }
 
 function asString(value: unknown): string {
@@ -69,7 +90,7 @@ type ReadOrder = { input: OrderInput; values: OrderFormValues };
 async function readOrderInput(c: Context<AppEnv>): Promise<ReadOrder> {
   const contentType = c.req.header("content-type") ?? "";
   if (contentType.includes("application/json")) {
-    const body = await c.req.json<Record<string, unknown>>();
+    const body = (await readJsonBody(c)) ?? {};
     return {
       input: {
         name: asString(body.name),
@@ -81,7 +102,7 @@ async function readOrderInput(c: Context<AppEnv>): Promise<ReadOrder> {
       values: {},
     };
   }
-  const form = await c.req.parseBody();
+  const form = await parseForm(c);
   const pickupAt =
     asString(form.pickup_at) ||
     `${asString(form.pickup_day)} ${asString(form.pickup_slot)}`.trim();
@@ -165,7 +186,7 @@ app.get("/api/menu", async (c) => {
       name: d.name,
       category: d.category,
       description: d.description,
-      sizes: JSON.parse(d.sizes_json) as unknown,
+      sizes: parseSizes(d.sizes_json),
       price_cents: d.price_cents,
       featured: !!d.featured,
       image: d.image ?? null,
@@ -202,22 +223,29 @@ app.post("/api/message", async (c) => {
   let name = "";
   let contact = "";
   let body = "";
+  let trap = "";
   if (contentType.includes("application/json")) {
-    const json = await c.req.json<Record<string, unknown>>();
+    const json = (await readJsonBody(c)) ?? {};
     name = asString(json.name);
     contact = asString(json.contact);
     body = asString(json.body);
   } else {
-    const form = await c.req.parseBody();
+    const form = await parseForm(c);
     name = asString(form.name);
     contact = asString(form.contact);
     body = asString(form.body);
+    trap = asString(form.fax);
+  }
+  // A hidden field no person can see or tab into. Filled means a bot.
+  if (trap.trim()) {
+    if (wantsJson(c)) return c.json({ ok: true });
+    return c.redirect("/?sent=1#contact", 303);
   }
   const result = await createMessage(c.env.DB, name, contact, body);
   if (!result.ok) {
     if (wantsJson(c)) return c.json({ ok: false, error: result.error }, result.status);
     const drinks = await listMenu(c.env.DB);
-    return c.html(homePage(drinks, { error: result.error }), result.status);
+    return c.html(homePage(drinks, { error: result.error, values: { name, contact, body } }), result.status);
   }
   if (wantsJson(c)) return c.json({ ok: true });
   return c.redirect("/?sent=1#contact", 303);
@@ -234,6 +262,12 @@ app.get("/sitemap.xml", (c) => {
 ${urls.map((u) => `  <url><loc>https://${site.domain}${u}</loc></url>`).join("\n")}
 </urlset>`;
   return c.body(xml, 200, { "content-type": "application/xml; charset=utf-8" });
+});
+
+app.onError((error, c) => {
+  console.error("unhandled", error);
+  if (wantsJson(c)) return c.json({ ok: false, error: "Something went wrong." }, 500);
+  return c.html(errorPage(), 500);
 });
 
 app.notFound(async (c) => {

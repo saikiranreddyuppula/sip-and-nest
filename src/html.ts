@@ -449,6 +449,7 @@ select {
   background: var(--copper-soft); color: var(--copper-ink);
   border-radius: var(--radius-pill); padding: .5rem 1rem; font-size: var(--fs-sm); margin: 0 0 1.25rem;
 }
+.trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 .nojs-note { display: none; }
 .no-js .nojs-note { display: flex; }
 .no-js .slip { display: none; }
@@ -966,9 +967,12 @@ function statusChip(): string {
   </p>`;
 }
 
-function contactForm(notice?: string, error?: string): string {
+/** What the visitor typed, echoed back when their note is rejected. */
+export type MessageFormValues = { name?: string; contact?: string; body?: string };
+
+function contactForm(notice?: string, error?: string, values: MessageFormValues = {}): string {
   const flash = error
-    ? `<p class="notice notice--bad" role="alert">${esc(error)}</p>`
+    ? `<p class="notice notice--bad" role="alert" id="note-error" tabindex="-1">${esc(error)}</p>`
     : notice
       ? `<p class="notice notice--good" role="status">${esc(notice)}</p>`
       : "";
@@ -979,16 +983,20 @@ function contactForm(notice?: string, error?: string): string {
     <form method="post" action="/api/message">
       <div class="field">
         <label for="mname">Your name</label>
-        <input id="mname" name="name" required maxlength="80" autocomplete="name">
+        <input id="mname" name="name" required maxlength="80" autocomplete="name" value="${esc(values.name ?? "")}">
       </div>
       <div class="field">
         <label for="mcontact">Phone or email</label>
-        <input id="mcontact" name="contact" required maxlength="120" autocomplete="email">
+        <input id="mcontact" name="contact" required maxlength="120" autocomplete="email" value="${esc(values.contact ?? "")}">
         <p class="field__hint" id="mcontact-hint">So we can write back.</p>
       </div>
       <div class="field">
         <label for="mbody">Message</label>
-        <textarea id="mbody" name="body" required maxlength="1000"></textarea>
+        <textarea id="mbody" name="body" required maxlength="1000">${esc(values.body ?? "")}</textarea>
+      </div>
+      <div class="trap" aria-hidden="true">
+        <label for="mfax">Leave this empty</label>
+        <input id="mfax" name="fax" tabindex="-1" autocomplete="off">
       </div>
       <button class="btn btn--wide" type="submit">Send note</button>
     </form>
@@ -997,7 +1005,7 @@ function contactForm(notice?: string, error?: string): string {
 
 export function homePage(
   drinks: CoffeeType[],
-  opts: { notice?: string; error?: string } = {},
+  opts: { notice?: string; error?: string; values?: MessageFormValues } = {},
 ): string {
   const available = drinks.filter((d) => d.available);
   const ordered = available
@@ -1110,7 +1118,8 @@ export function homePage(
         <p class="muted">Closed Mondays so the bar gets a day off.</p>
       </div>
       <div id="contact" style="scroll-margin-top:calc(var(--header-h) + 1rem)">
-        ${contactForm(opts.notice, opts.error)}
+        ${contactForm(opts.notice, opts.error, opts.values)}
+        ${opts.error ? `<script>(function(){var e=document.getElementById("note-error");if(e){e.scrollIntoView({block:"center"});e.focus();}})();</script>` : ""}
       </div>
     </div>
   </section>`;
@@ -1712,6 +1721,26 @@ export function thanksPage(order: OrderRow, lines: OrderLine[], totalCents: numb
     title: `Order ${order.number}`,
     path: "/order/thanks",
     description: "Your Sip & Nest order is received. Pay when you pick up.",
+    body,
+    noindex: true,
+  });
+}
+
+export function errorPage(): string {
+  const body = `
+  <div class="wrap section center" style="max-width:34rem">
+    <p class="kicker">Something went wrong</p>
+    <h1>The machine stalled.</h1>
+    <p class="lede center">That is on us, not on you. Try again in a moment — or ring the bar on <a href="tel:${telHref()}">${esc(site.phone)}</a> and we will take the order down by hand.</p>
+    <p class="btn-row" style="justify-content:center">
+      <a class="btn" href="/menu">Back to the menu</a>
+      <a class="btn btn--ghost" href="/">Home</a>
+    </p>
+  </div>`;
+  return layout({
+    title: "Something went wrong",
+    path: "/error",
+    description: "Something went wrong at Sip & Nest.",
     body,
     noindex: true,
   });
