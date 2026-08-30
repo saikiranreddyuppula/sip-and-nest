@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sip-and-nest",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "routes": [
+    { "pattern": "sipandnest.com", "custom_domain": true },
+    { "pattern": "www.sipandnest.com", "custom_domain": true }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sip-and-nest",
+      "database_id": "2e4e1d9f-b2a5-4b6d-95e8-e7dc1e170683",
+      "migrations_dir": "./migrations"
+    }
+  ]
+}
