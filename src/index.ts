@@ -6,10 +6,21 @@ import {
   getOrderByNumber,
   listAllDrinks,
   listMenu,
+  listOrderLines,
+  orderTotalCents,
   type OrderInput,
   type OrderItemInput,
 } from "./db";
-import { MARK_SVG, homePage, menuPage, notFoundPage, orderPage, thanksPage } from "./html";
+import {
+  MANIFEST,
+  MARK_SVG,
+  homePage,
+  menuPage,
+  notFoundPage,
+  orderPage,
+  thanksPage,
+  type OrderFormValues,
+} from "./html";
 
 export type AppEnv = { Bindings: Env & { ASSETS: Fetcher } };
 
@@ -48,16 +59,22 @@ function parseItems(raw: unknown): OrderItemInput[] {
   return [];
 }
 
-async function readOrderInput(c: Context<AppEnv>): Promise<OrderInput> {
+/** The order plus, for form posts, the raw fields so a rejection can echo them back. */
+type ReadOrder = { input: OrderInput; values: OrderFormValues };
+
+async function readOrderInput(c: Context<AppEnv>): Promise<ReadOrder> {
   const contentType = c.req.header("content-type") ?? "";
   if (contentType.includes("application/json")) {
     const body = await c.req.json<Record<string, unknown>>();
     return {
-      name: asString(body.name),
-      contact: asString(body.contact),
-      pickup_at: asString(body.pickup_at),
-      notes: asString(body.notes),
-      items: parseItems(body.items),
+      input: {
+        name: asString(body.name),
+        contact: asString(body.contact),
+        pickup_at: asString(body.pickup_at),
+        notes: asString(body.notes),
+        items: parseItems(body.items),
+      },
+      values: {},
     };
   }
   const form = await c.req.parseBody();
@@ -75,15 +92,29 @@ async function readOrderInput(c: Context<AppEnv>): Promise<OrderInput> {
     ];
   }
   return {
-    name: asString(form.name),
-    contact: asString(form.contact),
-    pickup_at: pickupAt,
-    notes: asString(form.notes),
-    items,
+    input: {
+      name: asString(form.name),
+      contact: asString(form.contact),
+      pickup_at: pickupAt,
+      notes: asString(form.notes),
+      items,
+    },
+    values: {
+      name: asString(form.name),
+      contact: asString(form.contact),
+      pickup_day: asString(form.pickup_day),
+      pickup_slot: asString(form.pickup_slot),
+      notes: asString(form.notes),
+    },
   };
 }
 
-app.get("/img/*", (c) => c.env.ASSETS.fetch(c.req.raw));
+app.get("/manifest.webmanifest", (c) =>
+  c.body(MANIFEST, 200, {
+    "content-type": "application/manifest+json; charset=utf-8",
+    "cache-control": "public, max-age=86400",
+  }),
+);
 
 app.get("/mark.svg", (c) =>
   c.body(MARK_SVG, 200, { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=86400" }),
@@ -97,7 +128,8 @@ app.get("/favicon.ico", (c) => c.redirect("/mark.svg", 302));
 
 app.get("/", async (c) => {
   const drinks = await listMenu(c.env.DB);
-  return c.html(homePage(drinks));
+  const sent = c.req.query("sent") === "1";
+  return c.html(homePage(drinks, sent ? { notice: "Thanks — your note is with us. We will be in touch." } : {}));
 });
 
 app.get("/menu", async (c) => {
@@ -112,7 +144,8 @@ app.get("/order/thanks", async (c) => {
   if (!number) return c.html(notFoundPage(), 404);
   const order = await getOrderByNumber(c.env.DB, number);
   if (!order) return c.html(notFoundPage(), 404);
-  return c.html(thanksPage(order));
+  const lines = await listOrderLines(c.env.DB, order.id);
+  return c.html(thanksPage(order, lines, orderTotalCents(lines)));
 });
 
 app.get("/about", (c) => c.redirect("/#about", 302));
@@ -137,12 +170,12 @@ app.get("/api/menu", async (c) => {
 });
 
 app.post("/api/order", async (c) => {
-  const input = await readOrderInput(c);
+  const { input, values } = await readOrderInput(c);
   const result = await createOrder(c.env.DB, input);
   if (!result.ok) {
     if (wantsJson(c)) return c.json({ ok: false, error: result.error }, result.status);
     const drinks = await listAllDrinks(c.env.DB);
-    return c.html(orderPage(drinks, result.error), result.status);
+    return c.html(orderPage(drinks, result.error, undefined, values), result.status);
   }
   if (wantsJson(c)) {
     return c.json({ ok: true, number: result.number, status: "received" });
@@ -151,11 +184,11 @@ app.post("/api/order", async (c) => {
 });
 
 app.post("/order", async (c) => {
-  const input = await readOrderInput(c);
+  const { input, values } = await readOrderInput(c);
   const result = await createOrder(c.env.DB, input);
   if (!result.ok) {
     const drinks = await listAllDrinks(c.env.DB);
-    return c.html(orderPage(drinks, result.error), result.status);
+    return c.html(orderPage(drinks, result.error, undefined, values), result.status);
   }
   return c.redirect(`/order/thanks?n=${encodeURIComponent(result.number)}`, 303);
 });
@@ -180,11 +213,10 @@ app.post("/api/message", async (c) => {
   if (!result.ok) {
     if (wantsJson(c)) return c.json({ ok: false, error: result.error }, result.status);
     const drinks = await listMenu(c.env.DB);
-    return c.html(homePage(drinks), result.status);
+    return c.html(homePage(drinks, { error: result.error }), result.status);
   }
   if (wantsJson(c)) return c.json({ ok: true });
-  const drinks = await listMenu(c.env.DB);
-  return c.html(homePage(drinks, "Thanks — we got your note."));
+  return c.redirect("/?sent=1#contact", 303);
 });
 
 app.get("/robots.txt", (c) =>

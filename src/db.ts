@@ -44,7 +44,7 @@ export type OrderInput = {
 
 export type OrderResult =
   | { ok: true; id: number; number: string }
-  | { ok: false; error: string; status: number };
+  | { ok: false; error: string; status: 400 };
 
 
 export function parseSizes(json: string): Size[] {
@@ -181,7 +181,7 @@ export async function createMessage(
   name: string,
   contact: string,
   body: string,
-): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+): Promise<{ ok: true } | { ok: false; error: string; status: 400 }> {
   const clean = cleanName(name);
   if (!clean) return { ok: false, error: "Name is required.", status: 400 };
   const c = contact.trim();
@@ -195,4 +195,30 @@ export async function createMessage(
     .bind(clean, c, text)
     .run();
   return { ok: true };
+}
+
+export type OrderLine = {
+  name: string;
+  size: string;
+  qty: number;
+  price_cents: number;
+  note: string | null;
+};
+
+export async function listOrderLines(db: D1Database, orderId: number): Promise<OrderLine[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT c.name AS name, i.size AS size, i.qty AS qty, i.price_cents AS price_cents, i.note AS note
+       FROM order_items i
+       JOIN coffee_types c ON c.id = i.coffee_type_id
+       WHERE i.order_id = ?
+       ORDER BY i.id`,
+    )
+    .bind(orderId)
+    .all<OrderLine>();
+  return results ?? [];
+}
+
+export function orderTotalCents(lines: OrderLine[]): number {
+  return lines.reduce((sum, line) => sum + line.price_cents * line.qty, 0);
 }
