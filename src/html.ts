@@ -790,7 +790,7 @@ function structuredData(drinks: CoffeeType[]): string {
     ],
     acceptsReservations: false,
     hasMap: mapsHref(),
-    hasMenu: {
+    ...(drinks.length ? { hasMenu: {
       "@type": "Menu",
       url: `https://${site.domain}/menu`,
       hasMenuSection: [
@@ -810,7 +810,7 @@ function structuredData(drinks: CoffeeType[]): string {
           })),
         },
       ],
-    },
+    } } : {}),
   };
   return `<script type="application/ld+json">${jsonScript(data)}</script>`;
 }
@@ -847,6 +847,9 @@ ${noindex ? '<meta name="robots" content="noindex, nofollow">' : `<link rel="can
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:url" content="${esc(canonical)}">
 <meta property="og:image" content="${esc(social)}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:alt" content="An espresso martini on the bar at Sip &amp; Nest">
 <meta property="og:locale" content="en_US">
 <meta name="twitter:card" content="summary_large_image">
@@ -866,7 +869,7 @@ ${header(path)}
 ${body}
 </main>
 ${footer()}
-${drinks && drinks.length ? structuredData(drinks) : ""}
+${noindex ? "" : structuredData(drinks ?? [])}
 <script>${CHROME_JS}</script>
 </body>
 </html>`;

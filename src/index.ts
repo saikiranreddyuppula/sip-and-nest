@@ -32,6 +32,22 @@ function receiptPath(number: string, token: string): string {
 
 const app = new Hono<AppEnv>();
 
+/**
+ * One canonical URL per page. www and a trailing slash both used to serve their
+ * own 200, and /menu/ fell through to the 404 page.
+ */
+app.use("*", async (c, next) => {
+  const url = new URL(c.req.url);
+  if (url.hostname === `www.${site.domain}`) {
+    url.hostname = site.domain;
+    return c.redirect(url.toString(), 301);
+  }
+  if (url.pathname.length > 1 && url.pathname.endsWith("/")) {
+    return c.redirect(url.pathname.replace(/\/+$/, "") + url.search, 301);
+  }
+  await next();
+});
+
 function wantsJson(c: { req: { header: (name: string) => string | undefined } }): boolean {
   const contentType = c.req.header("content-type") ?? "";
   if (contentType.includes("application/json")) return true;
@@ -160,7 +176,7 @@ app.get("/menu", async (c) => {
   return c.html(menuPage(drinks));
 });
 
-app.get("/order", (c) => c.redirect("/menu", 302));
+app.get("/order", (c) => c.redirect("/menu", 301));
 
 app.get("/order/thanks", async (c) => {
   const number = (c.req.query("n") ?? "").trim();
@@ -171,10 +187,11 @@ app.get("/order/thanks", async (c) => {
   return c.html(thanksPage(order, lines, orderTotalCents(lines)));
 });
 
-app.get("/about", (c) => c.redirect("/#about", 302));
+app.get("/about", (c) => c.redirect("/#about", 301));
 
 app.get("/api/menu", async (c) => {
   const drinks = await listMenu(c.env.DB);
+  c.header("x-robots-tag", "noindex");
   return c.json({
     ok: true,
     cafe: site.name,
@@ -250,7 +267,7 @@ app.post("/api/message", async (c) => {
 });
 
 app.get("/robots.txt", (c) =>
-  c.text(`User-agent: *\nAllow: /\nSitemap: https://${site.domain}/sitemap.xml\n`),
+  c.text(`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /order/thanks\nSitemap: https://${site.domain}/sitemap.xml\n`),
 );
 
 app.get("/sitemap.xml", (c) => {
@@ -268,14 +285,8 @@ app.onError((error, c) => {
   return c.html(errorPage(), 500);
 });
 
-app.notFound(async (c) => {
-  try {
-    const asset = await c.env.ASSETS.fetch(c.req.raw);
-    if (asset.status !== 404) return asset;
-  } catch {
-    /* no static asset */
-  }
-  return c.html(notFoundPage(), 404);
-});
+// Workers Assets answers matching paths before the Worker runs, so anything
+// reaching here really is missing.
+app.notFound((c) => c.html(notFoundPage(), 404));
 
 export default app;

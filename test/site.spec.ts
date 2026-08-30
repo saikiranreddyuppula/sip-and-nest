@@ -154,12 +154,13 @@ describe("accessibility scaffolding", () => {
 
 describe("routing", () => {
   it("order and about collapse into menu and home", async () => {
+    // permanent: the redesign folded both pages in, they are not coming back
     const order = await get("/order", { redirect: "manual" });
-    expect(order.status).toBe(302);
+    expect(order.status).toBe(301);
     expect(order.headers.get("location")).toBe("/menu");
 
     const about = await get("/about", { redirect: "manual" });
-    expect(about.status).toBe(302);
+    expect(about.status).toBe(301);
     expect(about.headers.get("location")).toBe("/#about");
   });
 
@@ -667,5 +668,56 @@ describe("dark surfaces keep a visible focus ring", () => {
   it("re-points the focus token on every dark band", async () => {
     const page = await html("/");
     expect(page).toContain(".hero, .night, .site-footer { --focus: var(--night-accent); }");
+  });
+});
+
+describe("one canonical url per page", () => {
+  it("sends www to the apex host", async () => {
+    const response = await worker.fetch(
+      new Request("https://www.sipandnest.com/menu?x=1", { redirect: "manual" }),
+    );
+    expect(response.status).toBe(301);
+    expect(response.headers.get("location")).toBe("https://sipandnest.com/menu?x=1");
+  });
+
+  it("strips a trailing slash instead of 404ing", async () => {
+    const response = await get("/menu/", { redirect: "manual" });
+    expect(response.status).toBe(301);
+    expect(response.headers.get("location")).toBe("/menu");
+    // and the root keeps working
+    expect((await get("/")).status).toBe(200);
+  });
+
+  it("keeps the json api and receipts out of the index", async () => {
+    const api = await get("/api/menu");
+    expect(api.headers.get("x-robots-tag")).toBe("noindex");
+    const robots = await (await get("/robots.txt")).text();
+    expect(robots).toContain("Disallow: /api/");
+    expect(robots).toContain("Disallow: /order/thanks");
+  });
+});
+
+describe("structured data", () => {
+  it("still publishes the business even when the menu is empty", async () => {
+    await env.DB.prepare("UPDATE coffee_types SET available = 0").run();
+    try {
+      const page = await html("/");
+      const match = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(page);
+      expect(match).not.toBeNull();
+      const data = JSON.parse(match![1]) as Record<string, unknown>;
+      expect(data["@type"]).toBe("CafeOrCoffeeShop");
+      expect(data.telephone).toBeTruthy();
+      expect(data.openingHoursSpecification).toBeTruthy();
+      expect(data.hasMenu).toBeUndefined();
+    } finally {
+      await env.DB.prepare("UPDATE coffee_types SET available = 1").run();
+    }
+  });
+
+  it("declares the social image dimensions", async () => {
+    const page = await html("/");
+    expect(page).toContain('property="og:image:width" content="1200"');
+    expect(page).toContain('property="og:image:height" content="630"');
+    expect(page).toContain('property="og:image:type" content="image/jpeg"');
   });
 });
