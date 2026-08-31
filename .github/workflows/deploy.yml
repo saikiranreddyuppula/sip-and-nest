@@ -10,36 +10,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  restore-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Restore src/html.ts if it was overwritten
-        run: |
-          set -euo pipefail
-          bytes=$(wc -c < src/html.ts)
-          echo "src/html.ts is ${bytes} bytes"
-          if [ "$bytes" -lt 1000 ]; then
-            echo "Restoring src/html.ts from 8780942e8c9a54a3f8d0aab83183e467de9441d7"
-            git checkout 8780942e8c9a54a3f8d0aab83183e467de9441d7 -- src/html.ts
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add src/html.ts
-            git commit -m "Restore src/html.ts from last good commit"
-            git push
-          fi
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
-      - run: npm ci
+      - name: Install dependencies
+        run: npm install
 
       - name: Deploy to Cloudflare Workers
         env:
@@ -48,11 +31,10 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
-            echo "CLOUDFLARE_API_TOKEN is not set. Skipping wrangler deploy."
-            echo "Add a Cloudflare API token secret named CLOUDFLARE_API_TOKEN, then re-run this workflow."
+            echo "::error::CLOUDFLARE_API_TOKEN secret is missing."
+            echo "Create a Cloudflare API token with Account / Cloudflare Workers / Edit and add it as GitHub secret CLOUDFLARE_API_TOKEN."
+            echo "Optional secret CLOUDFLARE_ACCOUNT_ID=9a80a76ea36cdd56412e84794cbeddca"
             exit 1
           fi
-          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-            export CLOUDFLARE_ACCOUNT_ID=9a80a76ea36cdd56412e84794cbeddca
-          fi
+          export CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID:-9a80a76ea36cdd56412e84794cbeddca}"
           npx wrangler deploy
