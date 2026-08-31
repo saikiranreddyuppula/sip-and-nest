@@ -1,0 +1,63 @@
+name: restore-html
+on:
+  push:
+    paths:
+      - ".github/workflows/restore-html.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore html.ts and apply layout plus scroll fixes
+        run: |
+          set -euo pipefail
+          git checkout 8780942e8c9a54a3f8d0aab83183e467de9441d7 -- src/html.ts
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path("src/html.ts")
+          t = p.read_text()
+          old_grid = ".grid { display: grid; gap: clamp(1.25rem, 2.5vw, 2rem); grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }\n.grid--fit { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }"
+          new_grid = """.grid {
+  display: grid;
+  gap: clamp(1.25rem, 2.5vw, 2rem);
+  grid-template-columns: 1fr;
+}
+@media (min-width: 700px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1040px) {
+  .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.grid--photos .card:first-child { grid-column: 1 / -1; }"""
+          if old_grid not in t:
+              raise SystemExit("expected grid CSS not found")
+          t = t.replace(old_grid, new_grid, 1)
+          t = t.replace(
+              "html, body { margin: 0; min-height: 100%; }" if False else "body {\n  margin: 0;\n  min-height: 100dvh;",
+              "html, body { overflow-x: clip; overflow-y: auto; }\nbody {\n  margin: 0;\n  min-height: 100dvh;",
+              1,
+          )
+          old_js = 'document.documentElement.classList.remove("no-js");try{var t=localStorage.getItem("sn-theme");'
+          new_js = 'document.documentElement.classList.remove("no-js");document.documentElement.classList.add("intro-seen");try{var t=localStorage.getItem("sn-theme");'
+          if old_js not in t:
+              raise SystemExit("expected boot script not found")
+          t = t.replace(old_js, new_js, 1)
+          t = t.replace("const highlights = ordered.slice(0, 3);", "const highlights = ordered;", 1)
+          t = t.replace(
+              '<div class="grid${highlights.length === 3 ? " grid--fit" : ""}">${highlights.map((d) => drinkCard(d, false)).join("")}</div>',
+              '<div class="grid grid--photos">${highlights.map((d, i) => drinkCard(d, false, i === 0)).join("")}</div>',
+              1,
+          )
+          p.write_text(t)
+          print("patched", p.stat().st_size)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/html.ts
+          git diff --cached --quiet || git commit -m "Restore html.ts and use a 3-up drink grid"
+          git push
