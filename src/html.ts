@@ -127,9 +127,12 @@ const CSS = `
 }
 @media (min-width: 800px) { :root { --header-h: 72px; } }
 
-@media (prefers-color-scheme: dark) {
+/* Scoped to screen: media queries carry no specificity, so an unscoped
+   :root:not([data-theme="light"]) outranks the print block's :root and a
+   receipt printed by an OS-dark visitor came out dark-on-dark. */
+@media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-  color-scheme: dark;
+    color-scheme: dark;
     --paper: #0e1310;
     --paper-2: #131a15;
     --surface: #17201a;
@@ -161,37 +164,39 @@ const CSS = `
   --grain: .035;
   }
 }
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --paper: #0e1310;
-  --paper-2: #131a15;
-  --surface: #17201a;
-  --ink: #e9ede4;
-  --ink-2: #a2b0a2;
-  --accent: #8ecfad;
-  --accent-ink: #8ecfad;
-  --accent-soft: #172a20;
-  --line: #24302a;
-  --line-strong: #33413a;
-  --field-line: #7d8f81;
-  --night: #080c09;
-  --night-ink: #e8ece3;
-  --night-ink-2: #9fae9f;
-  --night-accent: #8fd0ae;
-  --btn-bg: #2b6350;
-  --btn-ink: #f2f8f2;
-  --focus: #8ecfad;
-  --good-bg: #16281c;
-  --good-ink: #a9d3b3;
-  --bad-bg: #2e1a1a;
-  --bad-ink: #eda6a2;
-  --dot-open: #79c9a1;
-  --dot-shut: #c9908f;
-  --dot-unknown: #7d8f81;
-  --shadow: 0 1px 2px rgba(0,0,0,.5);
-  --shadow-lift: 0 2px 14px -6px rgba(0,0,0,.85);
-  --photo-filter: brightness(.86) saturate(.9);
-  --grain: .035;
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper: #0e1310;
+    --paper-2: #131a15;
+    --surface: #17201a;
+    --ink: #e9ede4;
+    --ink-2: #a2b0a2;
+    --accent: #8ecfad;
+    --accent-ink: #8ecfad;
+    --accent-soft: #172a20;
+    --line: #24302a;
+    --line-strong: #33413a;
+    --field-line: #7d8f81;
+    --night: #080c09;
+    --night-ink: #e8ece3;
+    --night-ink-2: #9fae9f;
+    --night-accent: #8fd0ae;
+    --btn-bg: #2b6350;
+    --btn-ink: #f2f8f2;
+    --focus: #8ecfad;
+    --good-bg: #16281c;
+    --good-ink: #a9d3b3;
+    --bad-bg: #2e1a1a;
+    --bad-ink: #eda6a2;
+    --dot-open: #79c9a1;
+    --dot-shut: #c9908f;
+    --dot-unknown: #7d8f81;
+    --shadow: 0 1px 2px rgba(0,0,0,.5);
+    --shadow-lift: 0 2px 14px -6px rgba(0,0,0,.85);
+    --photo-filter: brightness(.86) saturate(.9);
+    --grain: .035;
+  }
 }
 
 /* ---------- base ---------- */

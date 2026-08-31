@@ -135,6 +135,64 @@ const missing = await page.evaluate(async () => {
 });
 check("every srcset candidate exists", missing.length === 0, missing.join(", "));
 
+console.log("printing");
+{
+  // A colour scheme is a screen concern. When the dark palette was not scoped to
+  // screen its selector outranked the print block's :root, and an OS-dark
+  // visitor printed a receipt that was black on black.
+  const pickup = await page.evaluate(async () => {
+    const menu = await (await fetch("/menu")).text();
+    const doc = new DOMParser().parseFromString(menu, "text/html");
+    const day = doc.getElementById("pickup_day").options[0].value;
+    const slot = [...doc.getElementById("pickup_slot").options].find((o) => !o.disabled).value;
+    return `${day} \u00b7 ${slot}`;
+  });
+  const created = await page.request.post(`${BASE}/api/order`, {
+    headers: { "content-type": "application/json" },
+    data: {
+      name: "Print Check",
+      contact: "print@example.com",
+      pickup_at: pickup,
+      items: [{ slug: "espresso-martini", size: "5oz", qty: 1 }],
+    },
+  });
+  const order = await created.json();
+  check("the print fixture order was accepted", order.ok === true, JSON.stringify(order));
+
+  if (order.ok) {
+    for (const toggled of [false, true]) {
+      const ctx = await browser.newContext({ colorScheme: "dark" });
+      const p = await ctx.newPage();
+      if (toggled) {
+        await p.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
+        await p.evaluate(() => localStorage.setItem("sn-theme", "dark"));
+      }
+      await p.goto(`${BASE}/order/thanks?n=${order.number}&t=${order.token}`, { waitUntil: "networkidle" });
+      await p.emulateMedia({ media: "print" });
+      const printed = await p.evaluate(() => {
+        const style = (sel, prop) => getComputedStyle(document.querySelector(sel))[prop];
+        return {
+          card: style(".receipt", "backgroundColor"),
+          number: style(".receipt__number", "color"),
+          lede: style(".lede", "color"),
+        };
+      });
+      const label = toggled ? "toggled to dark" : "OS dark, never toggled";
+      check(
+        `a receipt prints on white paper (${label})`,
+        printed.card === "rgb(255, 255, 255)" && printed.number === "rgb(0, 0, 0)",
+        JSON.stringify(printed),
+      );
+      check(
+        `printed body text is dark (${label})`,
+        /^rgb\((\d+), \1, \1\)$/.test(printed.lede) === false || printed.lede === "rgb(51, 51, 51)",
+        printed.lede,
+      );
+      await ctx.close();
+    }
+  }
+}
+
 check("no console errors anywhere", consoleErrors.length === 0, consoleErrors.join(" | "));
 
 await browser.close();
