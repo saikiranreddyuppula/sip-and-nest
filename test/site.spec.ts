@@ -1,1 +1,2 @@
-USE_FILE:/workspace/sip-and-nest/test/site.spec.ts
+import { env, exports } from "cloudflare:workers";
+import { site } from "../src/config";
