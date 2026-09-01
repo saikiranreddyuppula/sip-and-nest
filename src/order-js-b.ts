@@ -26,7 +26,7 @@ export const ORDER_JS_B = `        announce("That is as much as one ticket holds
     var original = button.innerHTML;
     button.dataset.busy = "1";
     button.classList.add("is-added");
-    button.innerHTML = "Added \\u2713";
+    button.innerHTML = "Added \u2713";
     setTimeout(function () {
       button.innerHTML = original;
       button.classList.remove("is-added");
@@ -171,7 +171,7 @@ export const ORDER_JS_B = `        announce("That is as much as one ticket holds
     }
     var day = daySel ? daySel.value : "";
     var slot = slotSel ? slotSel.value : "";
-    document.getElementById("pickup_at").value = (day + " \\u00b7 " + slot).trim();
+    document.getElementById("pickup_at").value = (day + " \u00b7 " + slot).trim();
     document.getElementById("items").value = JSON.stringify(cart);
   });
 
