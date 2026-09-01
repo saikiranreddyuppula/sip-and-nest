@@ -1,1 +1,1 @@
-FILE_FROM_DISK:/workspace/sip-and-nest/src/html.ts
+SEE /tmp/mcp_create_args.json AND /workspace/sip-and-nest/src/html.ts FOR FULL 75907 BYTE FILE
