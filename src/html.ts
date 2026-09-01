@@ -1,1 +1,4 @@
-SEE /tmp/mcp_create_args.json AND /workspace/sip-and-nest/src/html.ts FOR FULL 75907 BYTE FILE
+export { MANIFEST, MARK_SVG, errorPage, notFoundPage, thanksPage } from "./html-end";
+export { homePage } from "./html-cards";
+export { menuPage, orderPage, type OrderFormValues } from "./html-order";
+export { esc } from "./html-chrome";
