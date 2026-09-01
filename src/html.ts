@@ -1,1 +1,1 @@
-SEE_WORKSPACE_FILE_html_ts
+USE_FILE:/workspace/sip-and-nest/src/html.ts

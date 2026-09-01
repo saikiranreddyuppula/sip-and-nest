@@ -1,1 +1,1 @@
-SEE_WORKSPACE_FILE_site_spec_ts
+USE_FILE:/workspace/sip-and-nest/test/site.spec.ts
