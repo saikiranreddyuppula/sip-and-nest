@@ -1,6 +1,6 @@
 import { site } from "./config";
 import { formatCents, type OrderLine, type OrderRow } from "./db";
-import { esc, layout } from "./html-chrome";
+import { esc, jsonScript, layout, mapsHref, telHref } from "./html-chrome";
 
 export function thanksPage(order: OrderRow, lines: OrderLine[], totalCents: number): string {
   const body = `
